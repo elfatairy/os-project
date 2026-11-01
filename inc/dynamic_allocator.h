@@ -20,12 +20,14 @@ struct BlockMetaData
 	LIST_ENTRY(BlockMetaData) prev_next_info;	/* linked list links */
 } __attribute__((packed));
 
+uint32 count = __builtin_clz(1);
+
 #define META_DATA_SIZE (sizeof(struct BlockMetaData))
 #define BLOCK_SIZE(LEVEL) (1<<LEVEL)
 
 //Array of lists; Each list is a level that contains the available block in it
 LIST_HEAD(BlockList, BlockMetaData);		// Declares 'struct BlockList'
-struct BlockList freeBlockLists[BUDDY_UPPER_LEVEL + 1] ;
+struct BlockList freeBlockLists[BUDDY_UPPER_LEVEL + 1];
 /******************************************************************************/
 
 /*Functions*/
@@ -41,3 +43,4 @@ void* create_buddy_space();
 void  delete_buddy_space(void *va);
 
 #endif
+

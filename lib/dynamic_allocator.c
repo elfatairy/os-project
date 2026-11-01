@@ -65,19 +65,58 @@ __inline__ uint32 get_block_size(void *va)
 	  }
 
 	  return 0;
-	//Comment the following line
-    //panic("get_block_size() not implemented");
 
 }
 //===========================
 // [2] ALLOCATE BLOCK:
 //===========================
+static uint32 find_needed_level(uint32 requiredSize) {
+	uint32 total_required_size = requiredSize + META_DATA_SIZE;
+
+	if (total_required_size > DYN_ALLOC_MAX_BLOCK_SIZE) {
+		return -12;
+	}
+	int needed_level = 32 - __builtin_clz(total_required_size - 1);
+	if (needed_level < BUDDY_LOWER_LEVEL) return BUDDY_LOWER_LEVEL;
+
+	return needed_level;
+}
+
+static struct BlockMetaData *get_block(int level) {
+	assert(level <= BUDDY_UPPER_LEVEL + 1 && level >= BUDDY_LOWER_LEVEL);
+
+	if (level == BUDDY_UPPER_LEVEL + 1) {
+		return (struct BlockMetaData *)create_buddy_space();
+	}
+
+	struct BlockList *list = &freeBlockLists[level];
+	if (LIST_EMPTY(list)) {
+		struct BlockMetaData *L_buddy = get_block(level + 1);
+		if (L_buddy == NULL) return NULL;
+		struct BlockMetaData *R_buddy = (struct BlockMetaData*)((uint32)L_buddy + BLOCK_SIZE(level)); //
+		L_buddy->is_free = 1;
+		L_buddy->level = level;
+		R_buddy->is_free = 1;
+		R_buddy->level = level;
+		LIST_INSERT_TAIL(list, L_buddy);
+		LIST_INSERT_TAIL(list, R_buddy);
+	}
+	struct BlockMetaData *selected_block = LIST_FIRST(list);
+	LIST_REMOVE(list, selected_block);
+	selected_block->is_free = 0;
+	return selected_block;
+}
+
 void *alloc_block(uint32 requiredSize)
 {
 	//TODO: [PROJECT'26.GM#1] DYNAMIC ALLOCATOR - [2] alloc_block
 	//Your code is here
-	//Comment the following line
-	panic("alloc_block() not implemented");
+	if (requiredSize == 0) return NULL;
+
+	uint32 needed_level = find_needed_level(requiredSize);
+	if (needed_level < 0) return NULL;
+	struct BlockMetaData *block_start = get_block(needed_level);
+	return (block_start == NULL ? NULL : (void *)((uint32)block_start + META_DATA_SIZE));
 }
 
 //===================================================
