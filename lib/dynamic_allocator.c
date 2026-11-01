@@ -17,9 +17,7 @@
 //==================================
 // [1] INITIALIZE BUDDY FREE LISTS:
 //==================================
-void buddy_init()
-{
-	//panic("buddy_init is not implemented yet");
+void buddy_init() {
 
 	for (int l = BUDDY_LOWER_LEVEL; l <= BUDDY_UPPER_LEVEL; ++l)
 	{
@@ -117,7 +115,7 @@ void *alloc_block(uint32 requiredSize)
 	if (requiredSize == 0) return NULL;
 
 	uint32 needed_level = find_needed_level(requiredSize);
-	if (needed_level < 0) return NULL;
+	if (needed_level == 0) return NULL;
 	struct BlockMetaData *block_start = get_block(needed_level);
 	return (block_start == NULL ? NULL : (void *)((uint32)block_start + META_DATA_SIZE));
 }
@@ -126,16 +124,12 @@ void *alloc_block(uint32 requiredSize)
 // [3] FREE BLOCK WITH COALESCING:
 //===================================================
 
-#define IS_LEFT(that_block) \
-	({ \
-		struct BlockMetaData *__that_block = (struct BlockMetaData *)that_block; \
-		uint32 __shifted = __that_block >> __that_block->level; \
-		!(__shifted & 1); \
-	})
-
+static inline int is_left(struct BlockMetaData *that_block) {
+  return (((uint32)that_block >> that_block->level) & 1) == 0;
+}
 
 struct BlockMetaData *check_for_my_buddy(struct BlockMetaData *that_block){
-	if (IS_LEFT(that_block)){
+	if (is_left(that_block)){
 		return (struct BlockMetaData *)((uint32)that_block + BLOCK_SIZE(that_block->level));
 	}
 	else{
@@ -144,24 +138,25 @@ struct BlockMetaData *check_for_my_buddy(struct BlockMetaData *that_block){
 }
 
 void Merge_Buddyzz(struct BlockMetaData *that_block){
+	uint32 level = that_block->level;
 	struct BlockMetaData *MyBuddy = check_for_my_buddy(that_block);
-	if (MyBuddy->is_free == 0 || MyBuddy->level != that_block->level){
+	if (MyBuddy->is_free == 0 || MyBuddy->level != level){
 		return;
 	}
 
 	struct BlockMetaData *Lovely_Merged_Buddyzz;
-		if (IS_LEFT(that_block)){
-			Lovely_Merged_Buddyzz = that_block;
-		}
-		else{
-			Lovely_Merged_Buddyzz = MyBuddy;
-		}
+	if (is_left(that_block)){
+		Lovely_Merged_Buddyzz = that_block;
+	}
+	else{
+		Lovely_Merged_Buddyzz = MyBuddy;
+	}
 
-		Lovely_Merged_Buddyzz->is_free = 1;
-		Lovely_Merged_Buddyzz->level = that_block->level +1;
+	Lovely_Merged_Buddyzz->is_free = 1;
+	Lovely_Merged_Buddyzz->level = level +1;
 
-	LIST_REMOVE(&freeBlockLists[that_block->level],that_block);
-	LIST_REMOVE(&freeBlockLists[that_block->level],MyBuddy);
+	LIST_REMOVE(&freeBlockLists[level],that_block);
+	LIST_REMOVE(&freeBlockLists[level],MyBuddy);
 
 	if (Lovely_Merged_Buddyzz->level == BUDDY_UPPER_LEVEL+1){
 			delete_buddy_space(Lovely_Merged_Buddyzz);
