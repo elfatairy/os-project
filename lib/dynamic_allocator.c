@@ -44,29 +44,32 @@ void PrintFreeBlockLists()
 //===========================
 // [1] GET BLOCK SIZE:
 //===========================
+static struct BlockMetaData *find_block_info(void *va) {
+	uint32 virt_addr =(uint32)va;
+	uint32 current_address = ROUNDDOWN(virt_addr,PAGE_SIZE);
+	uint32 page_end = current_address+PAGE_SIZE;
+
+	while(current_address<page_end)
+	{
+		struct BlockMetaData *blk =(struct BlockMetaData*)current_address;
+		uint32 size=BLOCK_SIZE(blk->level);
+		if (virt_addr>= current_address && virt_addr <current_address + size)
+			return blk;
+		current_address+= size;
+	}
+	return NULL;
+}
+
+
 __inline__ uint32 get_block_size(void *va)
 {
 	//TODO: [PROJECT'26.GM#1] DYNAMIC ALLOCATOR - [1] get_block_size
-
-	 uint32 virt_addr =(uint32)va;
-	 uint32 current_address = ROUNDDOWN(virt_addr,PAGE_SIZE);
-	 uint32 page_end = current_address+PAGE_SIZE;
-
-	 //Loop to find the needed block
-	 while(current_address<page_end)
-	  {
-	   struct BlockMetaData *blk =(struct BlockMetaData*)current_address;
-	   uint32 size=BLOCK_SIZE(blk->level);
-
-	   if (virt_addr>= current_address && virt_addr <current_address + size)
-	     return size;
-	   // if we didn't find it, move to next block in the frame
-	   current_address+= size;
-	  }
-
-	  return 0;
-
+	struct BlockMetaData *that_block;
+	if (that_block != NULL) return BLOCK_SIZE(that_block->level);
+	panic("The memory is has error");
 }
+
+
 //===========================
 // [2] ALLOCATE BLOCK:
 //===========================
@@ -122,12 +125,61 @@ void *alloc_block(uint32 requiredSize)
 //===================================================
 // [3] FREE BLOCK WITH COALESCING:
 //===================================================
+
+#define IS_LEFT(that_block) \
+	({ \
+		struct BlockMetaData *__that_block = (struct BlockMetaData *)that_block; \
+		uint32 __shifted = __that_block >> __that_block->level; \
+		!(__shifted & 1); \
+	})
+
+
+struct BlockMetaData *check_for_my_buddy(struct BlockMetaData *that_block){
+	if (IS_LEFT(that_block)){
+		return (struct BlockMetaData *)((uint32)that_block + BLOCK_SIZE(that_block->level));
+	}
+	else{
+		return (struct BlockMetaData *)((uint32)that_block - BLOCK_SIZE(that_block->level));
+	}
+}
+
+void Merge_Buddyzz(struct BlockMetaData *that_block){
+	struct BlockMetaData *MyBuddy = check_for_my_buddy(that_block);
+	if (MyBuddy->is_free == 0){
+		return;
+	}
+	LIST_REMOVE(freeBlockLists[that_block->level],that_block);
+	LIST_REMOVE(freeBlockLists[that_block->level],MyBuddy);
+
+	struct BlockMetaData *Lovely_Merged_Buddyzz;
+	if (IS_LEFT(that_block)){
+		Lovely_Merged_Buddyzz = that_block;
+	}
+	else{
+		Lovely_Merged_Buddyzz = MyBuddy;
+	}
+
+	Lovely_Merged_Buddyzz->is_free = 1;
+	Lovely_Merged_Buddyzz->level = that_block->level +1;
+
+	if (Lovely_Merged_Buddyzz->level == BUDDY_UPPER_LEVEL+1){
+			delete_buddy_space(Lovely_Merged_Buddyzz);
+			return;
+		}
+
+	LIST_INSERT_TAIL(freeBlockLists[Lovely_Merged_Buddyzz -> level],Lovely_Merged_Buddyzz);
+	Merge_Buddyzz(Lovely_Merged_Buddyzz);
+}
+
 void free_block(void *va)
 {
 	//TODO: [PROJECT'26.GM#1] DYNAMIC ALLOCATOR - [3] free_block
-	//Your code is here
-	//Comment the following line
-	panic("free_block() not implemented");
+	struct BlockMetaData *that_block;
+	if (that_block->is_free == 0){
+		that_block->is_free = 1;
+		LIST_INSERT_TAIL(freeBlockLists[that_block->level],that_block);
+		Merge_Buddyzz(that_block);
+	}
 }
 
 //=================================================================================//
