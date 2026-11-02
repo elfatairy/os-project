@@ -20,8 +20,6 @@ struct BlockMetaData
 	LIST_ENTRY(BlockMetaData) prev_next_info;	/* linked list links */
 } __attribute__((packed));
 
-uint32 count = __builtin_clz(1);
-
 #define META_DATA_SIZE (sizeof(struct BlockMetaData))
 #define BLOCK_SIZE(LEVEL) (1<<LEVEL)
 
