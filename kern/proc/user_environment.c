@@ -919,11 +919,26 @@ void* create_user_kern_stack(uint32* ptr_user_page_directory)
 	//TODO: [PROJECT'26.GM#3] FAULT HANDLER I - [10] create_user_kern_stack
 	//Your code is here
 	//Comment the following line
-	panic("create_user_kern_stack() is not implemented yet...!!");
+//	panic("create_user_kern_stack() is not implemented yet...!!");
 
 	//allocate space for the user kernel stack.
 	//remember to leave its bottom page as a GUARD PAGE (i.e. not mapped)
 	//return a pointer to the start of the allocated space (including the GUARD PAGE)
+	void *lowest_add_stack = kmalloc(KERNEL_STACK_SIZE);
+	uint32 virt_addr = (uint32) lowest_add_stack;
+	if(lowest_add_stack == NULL){
+		panic("something wrong in allocating the stack");
+	}
+	int t_p_index = PTX(lowest_add_stack);
+	uint32 *ptr_page_table;
+	int ret = get_page_table(ptr_user_page_directory, virt_addr, &ptr_page_table);
+	if(ret != TABLE_IN_MEMORY) {
+		panic("something wrong in allocating page");
+	}
+	ptr_page_table[t_p_index]= ptr_page_table[t_p_index] & (~PERM_PRESENT);
+	return lowest_add_stack;
+	//unmap_frame() فكرة
+	// the rerturn is sart of stack or bottom of stack (GUARD PAGE)?
 #endif
 }
 

@@ -171,6 +171,26 @@ void fault_handler(struct Trapframe *tf)
 			//(e.g. pointing to unmarked user heap page, kernel or wrong access rights),
 			//your code is here
 
+			if (fault_va >= USER_LIMIT){
+			    cprintf("you can't access kernal space");
+			    env_exit();
+			}
+			uint32* ptr_dir = faulted_env->env_page_directory;
+			uint32* ptr_table;
+			int ret = get_page_table(ptr_dir,fault_va,&ptr_table);
+			if(ret != TABLE_IN_MEMORY){
+				cprintf("something wrong in allocating page");
+				env_exit();
+			}
+			int table_index = PTX(fault_va);
+			if((ptr_table[table_index] & PERM_UHPAGE )== 0){
+				cprintf("you can't point to unmarked page");
+				env_exit();
+			}
+			if((ptr_table[table_index] & PERM_WRITEABLE )== 0){
+				cprintf("you can't write this page is read-only");
+				env_exit();
+			}
 
 			/*============================================================================================*/
 		}
@@ -273,7 +293,41 @@ void page_fault_handler(struct Env * faulted_env, uint32 fault_va)
 			//TODO: [PROJECT'26.GM#3] FAULT HANDLER I - [12] Placement
 			//Your code is here
 			//Comment the following line
-			panic("page_fault_handler().FIFO PLACEMENT is not implemented yet...!!");
+//			panic("page_fault_handler().FIFO PLACEMENT is not implemented yet...!!");
+			struct FrameInfo *frame = NULL;
+			int ret1 = allocate_frame(&frame);
+			if(ret1 != 0){
+				panic("there is no free frames");
+			}
+
+
+			int PERM = PERM_USER | PERM_WRITEABLE;
+			map_frame(faulted_env->env_page_directory, frame, fault_va,PERM );
+			int ret2 = pf_read_env_page(faulted_env, (void*)fault_va);
+			if (ret2 == E_PAGE_NOT_EXIST_IN_PF)
+			{
+			    bool is_s = (fault_va >= USTACKBOTTOM && fault_va < USTACKTOP);
+			    bool is_h  = (fault_va >= USER_HEAP_START && fault_va < USER_HEAP_MAX);
+
+			    if (is_s || is_h) {
+					struct WorkingSetElement* n_element = env_page_ws_list_create_element(faulted_env, fault_va);
+					LIST_INSERT_TAIL(&(faulted_env->page_WS_active_list), n_element);
+			    }
+			    else {
+			        cprintf("the address is not exist in page file");
+			        env_exit();
+			    }
+			}
+			else{
+
+				struct WorkingSetElement* n_element = env_page_ws_list_create_element(faulted_env, fault_va);
+				LIST_INSERT_TAIL(&(faulted_env->page_WS_active_list), n_element);
+
+			}
+
+
+
+
 		}
 		else if(isPageReplacmentAlgorithmLRU(PG_REP_LRU_LISTS_APPROX))
 		{
