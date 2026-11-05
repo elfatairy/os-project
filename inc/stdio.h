@@ -49,9 +49,9 @@ enum
 	TEXTBG_light_grey = 0x70
 };
 // special attributes
-#define TEXT_blink 0x80
-#define TEXT_DEFAULT_CLR 0x700 //black & white
-#define TEXT_PANIC_CLR (TEXT_red + TEXTBG_light_grey)
+#define TEXT_blink 0x10 //0x80
+#define TEXT_DEFAULT_CLR 0x02//0x700 //black & white
+#define TEXT_PANIC_CLR 0x02//(TEXT_red + TEXTBG_light_grey)
 #define TEXT_ERROR_CLR (TEXT_light_red + TEXTBG_light_grey)
 #define TEXT_WARN_CLR (TEXT_yellow + TEXTBG_light_grey)
 #define TEXT_TESTERR_CLR (TEXT_light_red + TEXTBG_black)
