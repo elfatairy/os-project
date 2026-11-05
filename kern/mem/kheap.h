@@ -5,6 +5,7 @@
 # error "This is a FOS kernel header; user programs should not #include it"
 #endif
 
+#include <inc/queue.h>
 #include <inc/types.h>
 
 /*2017*/

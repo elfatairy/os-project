@@ -85,8 +85,11 @@ unsigned int kheap_physical_address(unsigned int virtual_address)
 	//TODO: [PROJECT'26.GM#2] KERNEL HEAP - [8] kheap_physical_address
 	//Your code is here
 	//Comment the following line
-	panic("kheap_physical_address() is not implemented yet...!!");
+	//	panic("kheap_physical_address() is not implemented yet...!!");
 
+	uint32 *ptr_page_table;
+	get_page_table(ptr_page_directory, virtual_address, &ptr_page_table);
+	return (PPN(ptr_page_table[PTX(virtual_address)]) << PTXSHIFT) + PGOFF(virtual_address);
 	/*EFFICIENT IMPLEMENTATION ~O(1) IS REQUIRED */
 }
 
