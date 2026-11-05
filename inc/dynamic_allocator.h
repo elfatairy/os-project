@@ -25,7 +25,7 @@ struct BlockMetaData
 
 //Array of lists; Each list is a level that contains the available block in it
 LIST_HEAD(BlockList, BlockMetaData);		// Declares 'struct BlockList'
-struct BlockList freeBlockLists[BUDDY_UPPER_LEVEL + 1] ;
+struct BlockList freeBlockLists[BUDDY_UPPER_LEVEL + 1];
 /******************************************************************************/
 
 /*Functions*/
@@ -41,3 +41,4 @@ void* create_buddy_space();
 void  delete_buddy_space(void *va);
 
 #endif
+
