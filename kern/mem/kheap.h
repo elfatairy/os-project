@@ -18,9 +18,18 @@
 
 /******************************************************************************/
 //TODO: [PROJECT'26.GM#2] KERNEL HEAP - [0] GIVEN DATA
-uint32 kheapPageAllocStart ;
-uint32 kheapPageAllocBreak ;
+uint32 kheapPageAllocStart;
+uint32 kheapPageAllocBreak;
 uint32 kheapPlacementStrategy;
+struct AreaMetaData
+{
+	uint8 level;		//block level
+	uint8 is_free;		//is_free block?
+	LIST_ENTRY(AreaMetaData) prev_next_info;	/* linked list links */
+} __attribute__((packed));
+
+LIST_HEAD(AreaList, AreaMetaData);		// Declares 'struct BlockList'
+struct AreaList freeAreaList;
 /******************************************************************************/
 
 /*2025*/ //Replaced by setter & getter function
@@ -37,7 +46,7 @@ void *krealloc(void *virtual_address, unsigned int new_size);
 unsigned int kheap_virtual_address(unsigned int physical_address);
 unsigned int kheap_physical_address(unsigned int virtual_address);
 
-int numOfKheapVACalls ;
+int numOfKheapVACalls;
 
 
 #endif // FOS_KERN_KHEAP_H_
