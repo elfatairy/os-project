@@ -126,8 +126,25 @@ struct AreaMetaData *get_area(unsigned int size) {
 	return newFreeArea;
 }
 
-struct AreaMetaData *get_next_area(struct AreaMetaData *area) {
-	return area;
+struct AreaMetaData *get_next_free_area(struct AreaMetaData *area) {
+	struct AreaMetaData *el;
+	uint32 next_area_start_address = (uint32)area->start_address + area->size;
+	LIST_FOREACH(el, freeAreaList, AreaMetaData) {
+		if (((uint32)el->start_address) == next_area_start_address) {
+			return el;
+		}
+	}
+	return NULL;
+}
+
+struct AreaMetaData *get_prev_free_area(struct AreaMetaData *area) {
+	struct AreaMetaData *el;
+	LIST_FOREACH(el, freeAreaList, AreaMetaData) {
+		if (((uint32)el->start_address + el->size) == (uint32)area->start_address) {
+			return el;
+		}
+	}
+	return NULL;
 }
 
 void* kmalloc(unsigned int size)
