@@ -60,7 +60,16 @@ void* create_buddy_space()
 	//TODO: [PROJECT'26.GM#2] KERNEL HEAP - [4] create_buddy_space
 	//Your code is here
 	//Comment the following line
-	panic("create_buddy_space() not implemented");
+	void* buddy_va = kmalloc(PAGE_SIZE);
+	if (buddy_va == NULL) {
+		return NULL;
+	}
+	uint32 *ptr_page_table;
+	if (get_page_table(ptr_page_directory, buddy_va, &ptr_page_table) == TABLE_NOT_EXIST) {
+		return NULL;
+	}
+	return ptr_page_table[PTX(buddy_va)] || PERM_BSP;
+//	panic("create_buddy_space() not implemented");
 }
 
 void  delete_buddy_space(void *va)
@@ -83,10 +92,14 @@ void* kmalloc(unsigned int size)
 	//TODO: [PROJECT'26.GM#2] KERNEL HEAP - [6] kmalloc
 	//Your code is here
 	//Comment the following line
-	kpanic_into_prompt("kmalloc() is not implemented yet...!!");
+//	kpanic_into_prompt("kmalloc() is not implemented yet...!!");
+	if (size <= DYN_ALLOC_MAX_BLOCK_SIZE) {
+		return alloc_block(size);
+	}
+
+
 
 	/*EFFICIENT IMPLEMENTATION ~O(#FREE BLOCKS + #ALLOCATED PAGES) IS REQUIRED */
-
 }
 
 void kfree(void* virtual_address)
@@ -106,10 +119,14 @@ unsigned int kheap_physical_address(unsigned int virtual_address)
 	//Your code is here
 	//Comment the following line
 	//	panic("kheap_physical_address() is not implemented yet...!!");
-
+	if (virtual_address >= KERNEL_HEAP_MAX || virtual_address < KERNEL_HEAP_START) {
+		return 0;
+	}
 	uint32 *ptr_page_table;
-	get_page_table(ptr_page_directory, virtual_address, &ptr_page_table);
-	return (PPN(ptr_page_table[PTX(virtual_address)]) << PTXSHIFT) + PGOFF(virtual_address);
+	if (get_page_table(ptr_page_directory, virtual_address, &ptr_page_table) == TABLE_NOT_EXIST) {
+		return 0;
+	}
+	return EXTRACT_ADDRESS(ptr_page_table[PTX(virtual_address)]) + PGOFF(virtual_address);
 	/*EFFICIENT IMPLEMENTATION ~O(1) IS REQUIRED */
 }
 
@@ -118,8 +135,15 @@ unsigned int kheap_virtual_address(unsigned int physical_address)
 	//TODO: [PROJECT'26.GM#2] KERNEL HEAP - [9] kheap_virtual_address
 	//Your code is here
 	//Comment the following line
-	panic("kheap_virtual_address() is not implemented yet...!!");
+//	panic("kheap_virtual_address() is not implemented yet...!!");
 
+
+	struct FrameInfo *ptr_frame_info = to_frame_info(physical_address);
+
+	if(ptr_frame_info->va == NULL)
+		return 0;
+
+	return ptr_frame_info->va + POGFF(physical_address);
 	/*EFFICIENT IMPLEMENTATION ~O(1) IS REQUIRED */
 }
 
