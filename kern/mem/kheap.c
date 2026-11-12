@@ -188,9 +188,34 @@ void *krealloc(void *virtual_address, uint32 new_size)
 			}
 			if(el->size < new_size){
 				if(get_next_area(el) == NULL){
+//					struct AreaMetaData * ele;
+//					LIST_FOREACH(ele, freeAreaList, AreaMetaData){
+//					}
+					if(new_size <= DYN_ALLOC_MAX_BLOCK_SIZE) {
+						alloc_block(new_size);
+					}
+					else{
+						uint32 new_v_a = kmalloc(new_size);
+						uint32 old_v_a = el->start_address;
+						while(new_v_a < el->size ){
+							int old_t_x = PTE(old_v_a);
+							uint32 old_ptr_page;
+							int ret = get_page_table(ptr_page_directory, old_v_a, &old_ptr_page);
+							if(ret != TABLE_IN_MEMORY) {
+								panic("something wrong in allocating page");
+							}
+							int PERM = old_ptr_page[old_t_x] & 0xFFF;
+							struct FrameInfo current_frame = get_frame_info(ptr_page_directory,old_v_a,&old_ptr_page);
+							map_frame(ptr_page_directory,current_frame,new_v_a,PERM);
+							unmap_frame(unmap_frame,old_v_a);
+						}
 
-//					kfree()
+					}
 				}
+
+				alloc_helper(el->size , new_size );
+				el->size = el->start_address + new_size;
+
 			}
 
 
