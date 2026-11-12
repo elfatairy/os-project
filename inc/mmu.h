@@ -72,7 +72,7 @@
 #define PTE_MBZ				0x180	// Bits must be zero
 #define PERM_BUFFERED 		0x200   //Page it buffered
 #define PERM_UHPAGE 		0x400 	//Page in User Heap
-#define PERM_BSP 		0x800 	// Is Body System Page
+#define PERM_BSP 		    0x800 	// Is Body System Page
 
 // The PERM_AVAILABLE bits aren't used by the kernel or interpreted by the
 // hardware, so user processes are allowed to set them arbitrarily.

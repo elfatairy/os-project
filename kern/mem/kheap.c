@@ -77,10 +77,13 @@ void* kmalloc(unsigned int size)
 	//Your code is here
 	//Comment the following line
 //	kpanic_into_prompt("kmalloc() is not implemented yet...!!");
-//	if (size < )
+	if (size <= DYN_ALLOC_MAX_BLOCK_SIZE) {
+		return alloc_block(size);
+	}
+
+
 
 	/*EFFICIENT IMPLEMENTATION ~O(#FREE BLOCKS + #ALLOCATED PAGES) IS REQUIRED */
-
 }
 
 void kfree(void* virtual_address)
