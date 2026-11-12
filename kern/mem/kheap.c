@@ -13,6 +13,22 @@
 //==================================================================================//
 //============================== GIVEN FUNCTIONS ===================================//
 //==================================================================================//
+
+int alloc_helper(void* v_a, uint32 size){
+	uint32 limit = (uint32) v_a + size;
+	while(v_a < limit){
+		struct FrameInfo *frame = NULL;
+		int ret1 = allocate_frame(&frame);
+		if(ret1 != 0){
+			return 1;
+		}
+		int PERM = PERM_WRITEABLE;
+		map_frame(ptr_page_directory, frame, v_a, PERM);
+		v_a += PAGE_SIZE;
+	}
+	return 0;
+}
+
 //TODO: [PROJECT'26.GM#2] KERNEL HEAP - [0] GIVEN FUNCTIONS
 //==============================================
 // [1] INITIALIZE KERNEL HEAP:
@@ -198,7 +214,8 @@ void *krealloc(void *virtual_address, uint32 new_size)
 			}
 			if(el->size < new_size){
 				if(get_next_area(el) == NULL){
-					kfree()
+
+//					kfree()
 				}
 			}
 
