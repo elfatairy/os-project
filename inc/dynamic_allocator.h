@@ -21,7 +21,10 @@ struct BlockMetaData
 } __attribute__((packed));
 
 #define META_DATA_SIZE (sizeof(struct BlockMetaData))
+
 #define BLOCK_SIZE(LEVEL) (1<<LEVEL)
+
+
 
 //Array of lists; Each list is a level that contains the available block in it
 LIST_HEAD(BlockList, BlockMetaData);		// Declares 'struct BlockList'
