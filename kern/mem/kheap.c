@@ -67,6 +67,10 @@ void  delete_buddy_space(void *va)
 /**************************************************/
 /* PAGE ALLOCATOR */
 /**************************************************/
+struct AreaMetaData *get_next_area(struct AreaMetaData *area) {
+	return NULL;
+}
+
 void* kmalloc(unsigned int size)
 {
 	//TODO: [PROJECT'26.GM#2] KERNEL HEAP - [6] kmalloc
@@ -134,5 +138,38 @@ void *krealloc(void *virtual_address, uint32 new_size)
 	//TODO: [PROJECT'26.BONUS#1] KERNEL REALLOC - krealloc
 	//Your code is here
 	//Comment the following line
-	panic("krealloc() is not implemented yet...!!");
+//	panic("krealloc() is not implemented yet...!!");
+
+	struct AreaMetaData * el;
+	LIST_FOREACH(el, allocatedAreaList, AreaMetaData) {
+		if(el && (el->start_address == virtual_address)){
+			if(new_size == 0){
+				kfree(virtual_address, el->size);
+				break;
+			}
+			if(virtual_address == NULL){
+				kmalloc(new_size);
+				break;
+			}
+			if(el->size == new_size){
+				break;
+			}
+			if(el->size > new_size){
+				void* limit = el-> start_address + new_size;
+				void* deleted_size = el-> size - new_size;
+				kfree(limit, deleted_size);
+				break;
+			}
+			if(el->size < new_size){
+				if(get_next_area(el) == NULL){
+					kfree()
+				}
+			}
+
+
+			break;
+		}
+	}
+
+
 }

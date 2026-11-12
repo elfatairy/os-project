@@ -24,13 +24,14 @@ uint32 kheapPageAllocBreak;
 uint32 kheapPlacementStrategy;
 struct AreaMetaData
 {
-	uint8 level;		//block level
-	uint8 is_free;		//is_free block?
+	void *start_address;
+	uint32 size;
 	LIST_ENTRY(AreaMetaData) prev_next_info;	/* linked list links */
 } __attribute__((packed));
 
 LIST_HEAD(AreaList, AreaMetaData);		// Declares 'struct BlockList'
 struct AreaList freeAreaList;
+struct AreaList allocatedAreaList;
 /******************************************************************************/
 
 /*2025*/ //Replaced by setter & getter function
