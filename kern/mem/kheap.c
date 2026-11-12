@@ -142,9 +142,14 @@ void* kmalloc(unsigned int size)
 void kfree(void* virtual_address)
 {
 	//TODO: [PROJECT'26.GM#2] KERNEL HEAP - [7] kfree
-	//Your code is here
+	struct AreaMetaData *current_area;
+	LIST_FOREACH( current_area ,allocatedAreaList , AreaMetaData );
+			if(current_area->start_address == virtual_address )
+			    LIST_REMOVE(allocatedAreaList, current_area);
+
+
 	//Comment the following line
-	panic("kfree() not implemented");
+	//panic("kfree() not implemented");
 
 	/*EFFICIENT IMPLEMENTATION ~O(#FREE BLOCKS + #FREED PAGES) IS REQUIRED */
 
