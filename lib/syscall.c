@@ -18,7 +18,6 @@ inline uint32 syscall(uint32 num, uint32 a1, uint32 a2, uint32 a3, uint32 a4, ui
 	// The last clause tells the assembler that this can
 	// potentially change the condition codes and arbitrary
 	// memory locations.
-
 	asm volatile("int %1\n"
 		: "=a" (ret)
 		: "i" (T_SYSCALL),
