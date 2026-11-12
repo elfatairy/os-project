@@ -180,11 +180,48 @@ void* kmalloc(unsigned int size)
 void kfree(void* virtual_address)
 {
 	//TODO: [PROJECT'26.GM#2] KERNEL HEAP - [7] kfree
-	struct AreaMetaData *current_area;
-	LIST_FOREACH( current_area ,allocatedAreaList , AreaMetaData );
-			if(current_area->start_address == virtual_address )
-			    LIST_REMOVE(allocatedAreaList, current_area);
+	struct AreaMetaData *current_area = NULL;
+	struct AreaMetaData *temp = NULL;
+	LIST_FOREACH( current_area ,allocatedAreaList , AreaMetaData )
+	{	if(current_area->start_address == virtual_address )
+		current_area = temp ;
+	    break;
 
+   }
+
+   if(current_area == NULL)
+	   return;
+
+	 LIST_REMOVE(allocatedAreaList, current_area);
+
+	 struct AreaMetaData *prev_free_area = get_prev_free_area(current_area);
+	 struct AreaMetaData *next_free_area = get_next_free_area(current_area);
+
+
+    if(current_area->size > PAGE_SIZE){
+
+	     if(next_free_area!= NULL) {
+	    	 current_area->size += next_free_area->size;
+	    	 LIAT
+	     }
+
+
+	     if( prev_free_area != NULL) {
+	    	 current_area->size += prev_free_area->size;
+	    	 current_area->start_address = prev_free_area->start_address;
+	     }
+
+
+	    uint32 free_area = current_area->start_address;
+	    uint32 free_frame = free_area + current_area->size;
+
+	    for(;free_area < free_frame ; free_area += PAGE_SIZE )
+	     	unmap_frame(*ptr_page_directory,free_area);
+
+
+    }
+
+	   //merged done
 
 	//Comment the following line
 	//panic("kfree() not implemented");
