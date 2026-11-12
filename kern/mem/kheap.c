@@ -52,7 +52,8 @@ void* create_buddy_space()
 	if (get_page_table(ptr_page_directory, buddy_va, &ptr_page_table) == TABLE_NOT_EXIST) {
 		return NULL;
 	}
-	return ptr_page_table[PTX(buddy_va)] || PERM_BSP;
+	ptr_page_table[PTX(buddy_va)] = ptr_page_table[PTX(buddy_va)] || PERM_BSP;
+	return buddy_va;
 //	panic("create_buddy_space() not implemented");
 }
 
@@ -67,6 +68,22 @@ void  delete_buddy_space(void *va)
 /**************************************************/
 /* PAGE ALLOCATOR */
 /**************************************************/
+struct AreaMetaData *get_area(unsigned int size) {
+	struct AreaMetaData *el;
+	struct AreaMetaData *worst_area;
+	LIST_FOREACH(el, freeAreaList, AreaMetaData) {
+		if (el->size == size) {
+			LIST_REMOVE(freeAreaList, el);
+			return el;
+		}
+		if (el->size > worst_area->size) {
+			worst_area = el;
+		}
+	}
+	LIST_REMOVE(freeAreaList, worst_area);
+	return worst_area;
+}
+
 struct AreaMetaData *get_next_area(struct AreaMetaData *area) {
 	return NULL;
 }
@@ -79,6 +96,15 @@ void* kmalloc(unsigned int size)
 //	kpanic_into_prompt("kmalloc() is not implemented yet...!!");
 	if (size <= DYN_ALLOC_MAX_BLOCK_SIZE) {
 		return alloc_block(size);
+	}
+
+	uint32 required_size = ROUNDUP(size, PAGE_SIZE);
+	struct AreaMetaData *used_area = get_area(required_size);
+	if (used_area->size != size) {
+		struct AreaMetaData *newFreeArea;
+		newFreeArea->size = used_area->size - required_size;
+		newFreeArea->start_address = used_area->start_address + required_size;
+		LIST_INSERT_TAIL(freeAreaList, newFreeArea);
 	}
 
 
@@ -150,7 +176,7 @@ void *krealloc(void *virtual_address, uint32 new_size)
 	//Comment the following line
 //	panic("krealloc() is not implemented yet...!!");
 
-	struct AreaMetaData * el;
+	struct AreaMetaData *el;
 	LIST_FOREACH(el, allocatedAreaList, AreaMetaData) {
 		if(el && (el->start_address == virtual_address)){
 			if(new_size == 0){
