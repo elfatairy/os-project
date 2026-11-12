@@ -73,6 +73,10 @@ void* create_buddy_space()
 //	panic("create_buddy_space() not implemented");
 }
 
+int is_buddy_space_page(uint32 pte) {
+	return (pte & PERM_BSP != 0);
+}
+
 void  delete_buddy_space(void *va)
 {
 	//TODO: [PROJECT'26.GM#2] KERNEL HEAP - [5] delete_buddy_space
@@ -82,7 +86,7 @@ void  delete_buddy_space(void *va)
 	if(ptr_page_table == NULL)
 		return ;
 	uint32 entry = ptr_page_table[PTX(va)];
-	if(entry & PERM_BSP == 0)
+	if(!is_buddy_space_page(entry))
 		panic("this page is not a buddy space");
 	else
 		 unmap_frame (ptr_page_directory, va);
