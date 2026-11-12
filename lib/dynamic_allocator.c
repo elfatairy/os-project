@@ -65,6 +65,7 @@ __inline__ uint32 get_block_size(void *va)
 	struct BlockMetaData *that_block = find_block_info(va);
 	if (that_block != NULL) return BLOCK_SIZE(that_block->level);
 	panic("The memory is has error");
+	//return 0;
 }
 
 
@@ -72,18 +73,20 @@ __inline__ uint32 get_block_size(void *va)
 // [2] ALLOCATE BLOCK:
 //===========================
 static uint32 find_needed_level(uint32 requiredSize) {
+
+	if (requiredSize > DYN_ALLOC_MAX_BLOCK_SIZE - META_DATA_SIZE) {
+	        return 0;
+	    }
 	uint32 total_required_size = requiredSize + META_DATA_SIZE;
 
-	if (total_required_size > DYN_ALLOC_MAX_BLOCK_SIZE) {
-		return 0;
-	}
+
 	int needed_level = 32 - __builtin_clz(total_required_size - 1);
 	if (needed_level < BUDDY_LOWER_LEVEL) return BUDDY_LOWER_LEVEL;
 
 	return needed_level;
 }
 
-static struct BlockMetaData *get_block(int level) {
+static struct BlockMetaData *get_block(uint32 level) {
 	assert(level <= BUDDY_UPPER_LEVEL + 1 && level >= BUDDY_LOWER_LEVEL);
 
 	if (level == BUDDY_UPPER_LEVEL + 1) {
@@ -128,7 +131,7 @@ static inline int is_left(struct BlockMetaData *that_block) {
   return (((uint32)that_block >> that_block->level) & 1) == 0;
 }
 
-struct BlockMetaData *check_for_my_buddy(struct BlockMetaData *that_block){
+static struct BlockMetaData *check_for_my_buddy(struct BlockMetaData *that_block){
 	if (is_left(that_block)){
 		return (struct BlockMetaData *)((uint32)that_block + BLOCK_SIZE(that_block->level));
 	}
@@ -137,7 +140,7 @@ struct BlockMetaData *check_for_my_buddy(struct BlockMetaData *that_block){
 	}
 }
 
-void Merge_Buddyzz(struct BlockMetaData *that_block){
+static void Merge_Buddyzz(struct BlockMetaData *that_block){
 	uint32 level = that_block->level;
 	struct BlockMetaData *MyBuddy = check_for_my_buddy(that_block);
 	if (MyBuddy->is_free == 0 || MyBuddy->level != level){
@@ -153,7 +156,7 @@ void Merge_Buddyzz(struct BlockMetaData *that_block){
 	}
 
 	Lovely_Merged_Buddyzz->is_free = 1;
-	Lovely_Merged_Buddyzz->level = level +1;
+	Lovely_Merged_Buddyzz->level = (uint8)(level + 1);
 
 	LIST_REMOVE(&freeBlockLists[level],that_block);
 	LIST_REMOVE(&freeBlockLists[level],MyBuddy);
@@ -171,6 +174,7 @@ void free_block(void *va)
 {
 	//TODO: [PROJECT'26.GM#1] DYNAMIC ALLOCATOR - [3] free_block
 	struct BlockMetaData *that_block = find_block_info(va);
+	if (that_block == NULL) return;
 	if (that_block->is_free == 0){
 		that_block->is_free = 1;
 		LIST_INSERT_TAIL(&freeBlockLists[that_block->level],that_block);
