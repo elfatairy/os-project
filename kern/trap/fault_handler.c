@@ -300,9 +300,19 @@ void page_fault_handler(struct Env * faulted_env, uint32 fault_va)
 				panic("there is no free frames");
 			}
 
+			int t_p_index = PTX(fault_va);
+			uint32 *ptr_page_table;
+			int ret = get_page_table(faulted_env ->env_page_directory, fault_va, &ptr_page_table);
+			if(ret != TABLE_IN_MEMORY) {
+				panic("something wrong in allocating page");
+			}
 
-			int PERM = PERM_USER | PERM_WRITEABLE;
-			map_frame(faulted_env->env_page_directory, frame, fault_va,PERM );
+
+			int PERM = ptr_page_table[t_p_index] & 0xFFF;
+
+
+
+			map_frame(faulted_env->env_page_directory, frame, fault_va, PERM);
 			int ret2 = pf_read_env_page(faulted_env, (void*)fault_va);
 			if (ret2 == E_PAGE_NOT_EXIST_IN_PF)
 			{
