@@ -16,14 +16,14 @@
 
 int alloc_helper(void* v_a, uint32 size){
 	uint32 limit = (uint32) v_a + size;
-	while(v_a < limit){
+	while(((uint32)v_a) < limit){
 		struct FrameInfo *frame = NULL;
 		int ret1 = allocate_frame(&frame);
 		if(ret1 != 0){
 			return 1;
 		}
 		int PERM = PERM_WRITEABLE;
-		map_frame(ptr_page_directory, frame, v_a, PERM);
+		map_frame(ptr_page_directory, frame, (uint32)v_a, PERM);
 		v_a += PAGE_SIZE;
 	}
 	return 0;
@@ -65,7 +65,7 @@ void* create_buddy_space()
 		return NULL;
 	}
 	uint32 *ptr_page_table;
-	if (get_page_table(ptr_page_directory, buddy_va, &ptr_page_table) == TABLE_NOT_EXIST) {
+	if (get_page_table(ptr_page_directory, (uint32)buddy_va, &ptr_page_table) == TABLE_NOT_EXIST) {
 		return NULL;
 	}
 	ptr_page_table[PTX(buddy_va)] = ptr_page_table[PTX(buddy_va)] || PERM_BSP;
@@ -92,16 +92,31 @@ struct AreaMetaData *get_area(unsigned int size) {
 			LIST_REMOVE(freeAreaList, el);
 			return el;
 		}
-		if (el->size > worst_area->size) {
-			worst_area = el;
+		if (el->size > size) {
+			if ((worst_area == NULL) || (el->size > worst_area->size)) {
+				worst_area = el;
+			}
 		}
 	}
-	LIST_REMOVE(freeAreaList, worst_area);
-	return worst_area;
+	if (worst_area != NULL) {
+		LIST_REMOVE(freeAreaList, worst_area);
+		return worst_area;
+	}
+
+
+	if (KERNEL_HEAP_MAX - size < kheapPageAllocBreak) {
+		return NULL;
+	}
+	struct AreaMetaData *newFreeArea;
+	newFreeArea->size = size;
+	newFreeArea->start_address = (void *)kheapPageAllocBreak;
+
+	kheapPageAllocBreak += size;
+	return newFreeArea;
 }
 
 struct AreaMetaData *get_next_area(struct AreaMetaData *area) {
-	return NULL;
+	return area;
 }
 
 void* kmalloc(unsigned int size)
@@ -109,13 +124,15 @@ void* kmalloc(unsigned int size)
 	//TODO: [PROJECT'26.GM#2] KERNEL HEAP - [6] kmalloc
 	//Your code is here
 	//Comment the following line
-//	kpanic_into_prompt("kmalloc() is not implemented yet...!!");
+	//	kpanic_into_prompt("kmalloc() is not implemented yet...!!");
 	if (size <= DYN_ALLOC_MAX_BLOCK_SIZE) {
 		return alloc_block(size);
 	}
 
 	uint32 required_size = ROUNDUP(size, PAGE_SIZE);
 	struct AreaMetaData *used_area = get_area(required_size);
+	if (used_area == NULL) return NULL;
+
 	if (used_area->size != size) {
 		struct AreaMetaData *newFreeArea;
 		newFreeArea->size = used_area->size - required_size;
@@ -123,7 +140,11 @@ void* kmalloc(unsigned int size)
 		LIST_INSERT_TAIL(freeAreaList, newFreeArea);
 	}
 
+	if (alloc_helper(used_area, required_size) != 0) {
+		return NULL;
+	}
 
+	return used_area->start_address;
 
 	/*EFFICIENT IMPLEMENTATION ~O(#FREE BLOCKS + #ALLOCATED PAGES) IS REQUIRED */
 }
@@ -169,7 +190,7 @@ unsigned int kheap_virtual_address(unsigned int physical_address)
 	if(ptr_frame_info->va == NULL)
 		return 0;
 
-	return ptr_frame_info->va + POGFF(physical_address);
+	return ((uint32)ptr_frame_info->va) + PGOFF(physical_address);
 	/*EFFICIENT IMPLEMENTATION ~O(1) IS REQUIRED */
 }
 
