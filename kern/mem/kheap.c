@@ -14,6 +14,22 @@
 //============================== GIVEN FUNCTIONS ===================================//
 //==================================================================================//
 
+void transit_data (uint32 old_v_a, uint32 new_v_a, uint32 o_size ){
+	while(new_v_a < o_size ){
+		int old_t_x = PTE(old_v_a);
+		uint32 old_ptr_page;
+		int ret = get_page_table(ptr_page_directory, old_v_a, &old_ptr_page);
+		if(ret != TABLE_IN_MEMORY) {
+			panic("something wrong in allocating page");
+		}
+		int PERM = old_ptr_page[old_t_x] & 0xFFF;
+		struct FrameInfo current_frame = get_frame_info(ptr_page_directory,old_v_a,&old_ptr_page);
+		map_frame(ptr_page_directory,current_frame,new_v_a,PERM);
+		unmap_frame(ptr_page_directory,old_v_a);
+		new_v_a += PAGE_SIZE;
+	}
+}
+
 int alloc_helper(void* v_a, uint32 size){
 	uint32 limit = (uint32) v_a + size;
 	while(((uint32)v_a) < limit){
@@ -250,62 +266,95 @@ void *krealloc(void *virtual_address, uint32 new_size)
 	//Comment the following line
 //	panic("krealloc() is not implemented yet...!!");
 
-	struct AreaMetaData *el;
-	LIST_FOREACH(el, allocatedAreaList, AreaMetaData) {
-		if(el && (el->start_address == virtual_address)){
-			if(new_size == 0){
-				kfree(virtual_address, el->size);
-				break;
-			}
-			if(virtual_address == NULL){
-				kmalloc(new_size);
-				break;
-			}
-			if(el->size == new_size){
-				break;
-			}
-			if(el->size > new_size){
-				void* limit = el-> start_address + new_size;
-				void* deleted_size = el-> size - new_size;
-				kfree(limit, deleted_size);
-				break;
-			}
-			if(el->size < new_size){
-				if(get_next_area(el) == NULL){
 //					struct AreaMetaData * ele;
 //					LIST_FOREACH(ele, freeAreaList, AreaMetaData){
 //					}
-					if(new_size <= DYN_ALLOC_MAX_BLOCK_SIZE) {
-						alloc_block(new_size);
+
+	if(virtual_address == NULL){
+		void * start_add = kmalloc(new_size);
+		return start_add;
+	}
+
+	struct AreaMetaData *el;
+	LIST_FOREACH(el, allocatedAreaList, AreaMetaData) {
+		uint32 old_size = el->size;
+		if(el && (el->start_address == virtual_address)){
+
+			if(new_size == 0){
+				kfree (virtual_address);
+				return NULL;
+			}
+
+			if(old_size == new_size){
+				return virtual_address;
+			}
+////////////////////////////////////////////////////////////////////////////////////
+			if( new_size > old_size ){
+				int t_p_index = PTX(virtual_address);
+				uint32 *ptr_page_table;
+				int ret = get_page_table(ptr_page_directory, virtual_address, &ptr_page_table);
+				if(ret != TABLE_IN_MEMORY) {
+					panic("something wrong in allocating page");
+				}
+				if(is_buddy_space_page(ptr_page_table[t_p_index])){
+					if(new_size >= DYN_ALLOC_MAX_BLOCK_SIZE){
+
+						uint32 new_v_add = (uint32)kmalloc(new_size);
+						free_block(virtual_address);
+						return (void*)new_v_add;
+//						transit_data(virtual_address,new_v_add,old_size);
+
+					} else {
+						uint32 new_v_add = (uint32)alloc_block(new_size);
+						free_block(virtual_address);
+						return (void*)new_v_add;
 					}
-					else{
-						uint32 new_v_a = kmalloc(new_size);
-						uint32 old_v_a = el->start_address;
-						while(new_v_a < el->size ){
-							int old_t_x = PTE(old_v_a);
-							uint32 old_ptr_page;
-							int ret = get_page_table(ptr_page_directory, old_v_a, &old_ptr_page);
-							if(ret != TABLE_IN_MEMORY) {
-								panic("something wrong in allocating page");
-							}
-							int PERM = old_ptr_page[old_t_x] & 0xFFF;
-							struct FrameInfo current_frame = get_frame_info(ptr_page_directory,old_v_a,&old_ptr_page);
-							map_frame(ptr_page_directory,current_frame,new_v_a,PERM);
-							unmap_frame(unmap_frame,old_v_a);
+///////////////////////////////////////////////////////////////////////////////////////
+				} else{
+					struct AreaMetaData *el2 = get_next_free_area(el);
+					if(el2 == NULL){
+						uint32 new_v_add = (uint32)kmalloc(new_size);
+						transit_data(virtual_address,new_v_add,old_size);
+						kfree(virtual_address);
+						return (void*)new_v_add;
+						} else {
+							uint32 new_v_add = el2->start_address;
+							alloc_helper(new_v_add , new_size );
+							el->size = new_size;
+							return virtual_address;
 						}
 
 					}
+				} else{
+					if(is_buddy_space_page()){
+						uint32 new_v_add = alloc_block(new_size);
+						free_block(virtual_address);
+						return new_v_add;
+					} else{
+						if(new_size >= DYN_ALLOC_MAX_BLOCK_SIZE){
+							uint32 limit = virtual_address + new_size;
+							while(limit < (limit + old_size)){
+								unmap_frame(ptr_page_directory,limit);
+								limit += PAGE_SIZE;
+							}
+							struct AreaMetaData *newFreeArea;
+							newFreeArea->size = new_size - old_size;
+							newFreeArea->start_address = virtual_address + new_size;
+							LIST_INSERT_TAIL(freeAreaList, newFreeArea);
+
+							el->size = new_size;
+							return virtual_address;
+						}else {
+							uint32 new_v_add = alloc_block(new_size);
+							free_block(virtual_address);
+							return new_v_add;
+						}
+					}
 				}
-
-				alloc_helper(el->size , new_size );
-				el->size = el->start_address + new_size;
-
 			}
-
-
-			break;
 		}
+	return NULL;
 	}
 
 
-}
+
