@@ -68,7 +68,7 @@ void* create_buddy_space()
 	if (get_page_table(ptr_page_directory, (uint32)buddy_va, &ptr_page_table) == TABLE_NOT_EXIST) {
 		return NULL;
 	}
-	ptr_page_table[PTX(buddy_va)] = ptr_page_table[PTX(buddy_va)] || PERM_BSP;
+	ptr_page_table[PTX(buddy_va)] = ptr_page_table[PTX(buddy_va)] | PERM_BSP;
 	return buddy_va;
 //	panic("create_buddy_space() not implemented");
 }
@@ -97,7 +97,7 @@ void  delete_buddy_space(void *va)
 /**************************************************/
 struct AreaMetaData *get_area(unsigned int size) {
 	struct AreaMetaData *el;
-	struct AreaMetaData *worst_area;
+	struct AreaMetaData *worst_area = NULL;
 	LIST_FOREACH(el, freeAreaList, AreaMetaData) {
 		if (el->size == size) {
 			LIST_REMOVE(freeAreaList, el);
@@ -118,7 +118,7 @@ struct AreaMetaData *get_area(unsigned int size) {
 	if (KERNEL_HEAP_MAX - size < kheapPageAllocBreak) {
 		return NULL;
 	}
-	struct AreaMetaData *newFreeArea;
+	struct AreaMetaData *newFreeArea = NULL	;
 	newFreeArea->size = size;
 	newFreeArea->start_address = (void *)kheapPageAllocBreak;
 
