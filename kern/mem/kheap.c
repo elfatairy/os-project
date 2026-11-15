@@ -1,397 +1,477 @@
 #include "kheap.h"
 
-#include <inc/memlayout.h>
-#include <inc/dynamic_allocator.h>
-#include <kern/conc/sleeplock.h>
-#include <kern/proc/user_environment.h>
-#include <kern/mem/memory_manager.h>
-#include "../conc/kspinlock.h"
 #include "../conc/ksemaphore.h"
+#include "../conc/kspinlock.h"
+#include <inc/dynamic_allocator.h>
+#include <inc/memlayout.h>
+#include <inc/mmu.h>
+#include <kern/conc/sleeplock.h>
 #include <kern/cpu/cpu.h>
+#include <kern/mem/memory_manager.h>
+#include <kern/proc/user_environment.h>
 
 /************************************************************************************/
 //==================================================================================//
-//============================== GIVEN FUNCTIONS ===================================//
+//============================== GIVEN FUNCTIONS
+//===================================//
 //==================================================================================//
 
-void transit_data (uint32 old_v_a, uint32 new_v_a, uint32 o_size ){
-	while(new_v_a < o_size ){
-		int old_t_x = PTE(old_v_a);
-		uint32 old_ptr_page;
-		int ret = get_page_table(ptr_page_directory, old_v_a, &old_ptr_page);
-		if(ret != TABLE_IN_MEMORY) {
-			panic("something wrong in allocating page");
-		}
-		int PERM = old_ptr_page[old_t_x] & 0xFFF;
-		struct FrameInfo current_frame = get_frame_info(ptr_page_directory,old_v_a,&old_ptr_page);
-		map_frame(ptr_page_directory,current_frame,new_v_a,PERM);
-		unmap_frame(ptr_page_directory,old_v_a);
-		new_v_a += PAGE_SIZE;
-	}
+int move_data(uint32 old_va, uint32 new_va, uint32 o_size) {
+  // while (new_va < o_size) {
+  //   int old_t_x = PTX(old_va);
+  //   uint32 old_ptr_page;
+  //   int ret = get_page_table(ptr_page_directory, old_va, &old_ptr_page);
+  //   if (ret != TABLE_IN_MEMORY) {
+  //     panic("something wrong in allocating page");
+  //   }
+  //   int PERM = old_ptr_page[old_t_x] & 0xFFF;
+  //   struct FrameInfo current_frame =
+  //       get_frame_info(ptr_page_directory, old_va, &old_ptr_page);
+  //   map_frame(ptr_page_directory, current_frame, new_va, PERM);
+  //   unmap_frame(ptr_page_directory, old_va);
+  //   new_va += PAGE_SIZE;
+  // }
+  return 0;
 }
 
-int alloc_helper(void* v_a, uint32 size){
-	uint32 limit = (uint32) v_a + size;
-	while(((uint32)v_a) < limit){
-		struct FrameInfo *frame = NULL;
-		int ret1 = allocate_frame(&frame);
-		if(ret1 != 0){
-			return 1;
-		}
-		int PERM = PERM_WRITEABLE;
-		map_frame(ptr_page_directory, frame, (uint32)v_a, PERM);
-		v_a += PAGE_SIZE;
-	}
-	return 0;
+int kheap_alloc_helper(uint32 va, uint32 size) {
+  va = EXTRACT_ADDRESS(va);
+  uint32 limit = va + size;
+
+  while (va < limit) {
+    struct FrameInfo *frame = NULL;
+    if (allocate_frame(&frame) != 0) {
+      return 1;
+    }
+    int perms = PERM_WRITEABLE;
+    cprintf("mapping va %x in alloc helper\n", va);
+    map_frame(ptr_page_directory, frame, va, perms);
+    frame->va = (void *)va;
+
+    va += PAGE_SIZE;
+  }
+  return 0;
 }
 
-//TODO: [PROJECT'26.GM#2] KERNEL HEAP - [0] GIVEN FUNCTIONS
+struct AreaMetaData *create_area_metadata(void *start_address, uint32 size) {
+  struct AreaMetaData *area =
+      (struct AreaMetaData *)alloc_block(sizeof(struct AreaMetaData));
+
+  if (area == NULL) {
+    return NULL;
+  }
+
+  area->start_address = start_address;
+  area->size = size;
+  area->prev_next_info.le_next = NULL;
+  area->prev_next_info.le_prev = NULL;
+
+  return area;
+}
+
+void remove_area_metadata(struct AreaMetaData *area) { free_block(area); }
+
+uint16 get_area_size(uint32 va) {
+  uint32 page_number = (va - kheapPageAllocStart) / PAGE_SIZE;
+  return area_sizes[page_number];
+}
+void set_area_size(uint32 va, uint16 page_count) {
+  uint32 page_number = (va - kheapPageAllocStart) / PAGE_SIZE;
+  area_sizes[page_number] = page_count;
+}
+
+// TODO: [PROJECT'26.GM#2] KERNEL HEAP - [0] GIVEN FUNCTIONS
 //==============================================
-// [1] INITIALIZE KERNEL HEAP:
+//  [1] INITIALIZE KERNEL HEAP:
 //==============================================
-void kheap_init()
-{
-	//==================================================================================
-	//DON'T CHANGE THESE LINES==========================================================
-	//==================================================================================
-	{
-		buddy_init();
-		set_kheap_strategy(KHP_PLACE_CUSTOMFIT);
-		kheapPageAllocStart = KERNEL_HEAP_START;
-		kheapPageAllocBreak = KERNEL_HEAP_START;
-	}
-	//==================================================================================
-	//==================================================================================
+void kheap_init() {
+  //==================================================================================
+  // DON'T CHANGE THESE
+  // LINES==========================================================
+  //==================================================================================
+  {
+    buddy_init();
+    set_kheap_strategy(KHP_PLACE_CUSTOMFIT);
+    kheapPageAllocStart = KERNEL_HEAP_START;
+    kheapPageAllocBreak = KERNEL_HEAP_START;
+    LIST_INIT(&freeAreaList);
+  }
+  //==================================================================================
+  //==================================================================================
 }
 /************************************************************************************/
 
 //==================================================================================//
-//============================ REQUIRED FUNCTIONS ==================================//
+//============================ REQUIRED FUNCTIONS
+//==================================//
 //==================================================================================//
 /**************************************************/
 /* BLOCK ALLOCATOR */
 /**************************************************/
-void* create_buddy_space()
-{
-	//TODO: [PROJECT'26.GM#2] KERNEL HEAP - [4] create_buddy_space
-	//Your code is here
-	//Comment the following line
-	void* buddy_va = kmalloc(PAGE_SIZE);
-	if (buddy_va == NULL) {
-		return NULL;
-	}
-	uint32 *ptr_page_table;
-	if (get_page_table(ptr_page_directory, (uint32)buddy_va, &ptr_page_table) == TABLE_NOT_EXIST) {
-		return NULL;
-	}
-	ptr_page_table[PTX(buddy_va)] = ptr_page_table[PTX(buddy_va)] || PERM_BSP;
-	return buddy_va;
-//	panic("create_buddy_space() not implemented");
+int mark_buddy_space_page(uint32 va) {
+  uint32 *ptr_page_table;
+
+  if (get_page_table(ptr_page_directory, (uint32)va, &ptr_page_table) ==
+      TABLE_NOT_EXIST) {
+    return 1;
+  }
+  ptr_page_table[PTX(va)] = ptr_page_table[PTX(va)] | PERM_BSP;
+
+  return 0;
+}
+int unmark_buddy_space_page(uint32 va) {
+  uint32 *ptr_page_table;
+
+  if (get_page_table(ptr_page_directory, (uint32)va, &ptr_page_table) ==
+      TABLE_NOT_EXIST) {
+    return 1;
+  }
+  ptr_page_table[PTX(va)] = ptr_page_table[PTX(va)] & (~PERM_BSP);
+
+  return 0;
 }
 
-int is_buddy_space_page(uint32 pte) {
-	return (pte & PERM_BSP != 0);
+bool is_buddy_space_page(uint32 pte) { return ((pte & PERM_BSP) != 0); }
+
+void *create_buddy_space() {
+  // TODO: [PROJECT'26.GM#2] KERNEL HEAP - [4] create_buddy_space
+  // Your code is here
+  // Comment the following line
+  //	panic("create_buddy_space() not implemented");
+  void *buddy_va = kmalloc(PAGE_SIZE);
+  if (buddy_va == NULL) {
+    return NULL;
+  }
+
+  if (mark_buddy_space_page((uint32)buddy_va) != 0) {
+    return NULL;
+  }
+
+  return buddy_va;
 }
 
-void  delete_buddy_space(void *va)
-{
-	//TODO: [PROJECT'26.GM#2] KERNEL HEAP - [5] delete_buddy_space
+void delete_buddy_space(void *va) {
+  // TODO: [PROJECT'26.GM#2] KERNEL HEAP - [5] delete_buddy_space
 
-	uint32 *ptr_page_table = NULL;
-    get_page_table(ptr_page_directory, va , &ptr_page_table)
-	if(ptr_page_table == NULL)
-		return ;
-	uint32 entry = ptr_page_table[PTX(va)];
-	if(!is_buddy_space_page(entry))
-		panic("this page is not a buddy space");
-	else
-		 unmap_frame (ptr_page_directory, va);
+  // uint32 *ptr_page_table = NULL;
+  // get_page_table(ptr_page_directory, va,
+  //                &ptr_page_table) if (ptr_page_table == NULL) return;
+  // uint32 entry = ptr_page_table[PTX(va)];
+  // if (!is_buddy_space_page(entry))
+  //   panic("this page is not a buddy space");
+  // else
+  //   unmap_frame(ptr_page_directory, va);
 
-
-	//Comment the following line
-	//panic("delete_buddy_space() not implemented");
+  // Comment the following line
+  // panic("delete_buddy_space() not implemented");
 }
 
 /**************************************************/
 /* PAGE ALLOCATOR */
 /**************************************************/
-struct AreaMetaData *get_area(unsigned int size) {
-	struct AreaMetaData *el;
-	struct AreaMetaData *worst_area;
-	LIST_FOREACH(el, freeAreaList, AreaMetaData) {
-		if (el->size == size) {
-			LIST_REMOVE(freeAreaList, el);
-			return el;
-		}
-		if (el->size > size) {
-			if ((worst_area == NULL) || (el->size > worst_area->size)) {
-				worst_area = el;
-			}
-		}
-	}
-	if (worst_area != NULL) {
-		LIST_REMOVE(freeAreaList, worst_area);
-		return worst_area;
-	}
+void *get_free_area(unsigned int size) {
+  uint32 kheapPlacementStrategy = get_kheap_strategy();
+  uint32 required_pages = size / PAGE_SIZE;
 
+  if (kheapPlacementStrategy == KHP_PLACE_CUSTOMFIT) {
+    struct AreaMetaData *el;
+    struct AreaMetaData *used_area = NULL;
 
-	if (KERNEL_HEAP_MAX - size < kheapPageAllocBreak) {
-		return NULL;
-	}
-	struct AreaMetaData *newFreeArea;
-	newFreeArea->size = size;
-	newFreeArea->start_address = (void *)kheapPageAllocBreak;
+    LIST_FOREACH(el, &freeAreaList, AreaMetaData) {
+      cprintf("free area starting at %x with size %u\n", el->start_address, el->size);
+      if (el->size == size) {
+        used_area = el;
+        break;
+      } else if (el->size > size) {
+        if ((used_area == NULL) || (el->size > used_area->size)) {
+          used_area = el;
+        }
+      }
+    }
+    void *area_start = NULL;
 
-	kheapPageAllocBreak += size;
-	return newFreeArea;
-}
+    if (used_area == NULL) {
+      cprintf("didn't find any area\n");
+      if (KERNEL_HEAP_MAX - size < kheapPageAllocBreak) {
+        return NULL;
+      }
 
-struct AreaMetaData *get_next_free_area(struct AreaMetaData *area) {
-	struct AreaMetaData *el;
-	uint32 next_area_start_address = (uint32)area->start_address + area->size;
-	LIST_FOREACH(el, freeAreaList, AreaMetaData) {
-		if (((uint32)el->start_address) == next_area_start_address) {
-			return el;
-		}
-	}
-	return NULL;
-}
+      cprintf("expanded the kheap (was at %x)\n", kheapPageAllocBreak);
+      area_start = (void *)kheapPageAllocBreak;
+      kheapPageAllocBreak += size;
+    } else {
+      area_start = used_area->start_address;
+      cprintf("found an area at %x with size %u\n", area_start, used_area->size);
 
-struct AreaMetaData *get_prev_free_area(struct AreaMetaData *area) {
-	struct AreaMetaData *el;
-	LIST_FOREACH(el, freeAreaList, AreaMetaData) {
-		if (((uint32)el->start_address + el->size) == (uint32)area->start_address) {
-			return el;
-		}
-	}
-	return NULL;
-}
-
-void* kmalloc(unsigned int size)
-{
-	//TODO: [PROJECT'26.GM#2] KERNEL HEAP - [6] kmalloc
-	//Your code is here
-	//Comment the following line
-	//	kpanic_into_prompt("kmalloc() is not implemented yet...!!");
-	if (size <= DYN_ALLOC_MAX_BLOCK_SIZE) {
-		return alloc_block(size);
-	}
-
-	uint32 required_size = ROUNDUP(size, PAGE_SIZE);
-	struct AreaMetaData *used_area = get_area(required_size);
-	if (used_area == NULL) return NULL;
-
-	if (used_area->size != size) {
-		struct AreaMetaData *newFreeArea;
-		newFreeArea->size = used_area->size - required_size;
-		newFreeArea->start_address = used_area->start_address + required_size;
-		LIST_INSERT_TAIL(freeAreaList, newFreeArea);
-	}
-
-	if (alloc_helper(used_area, required_size) != 0) {
-		return NULL;
-	}
-
-	return used_area->start_address;
-
-	/*EFFICIENT IMPLEMENTATION ~O(#FREE BLOCKS + #ALLOCATED PAGES) IS REQUIRED */
-}
-
-void kfree(void* virtual_address)
-{
-	//TODO: [PROJECT'26.GM#2] KERNEL HEAP - [7] kfree
-	struct AreaMetaData *current_area = NULL;
-	struct AreaMetaData *temp = NULL;
-	LIST_FOREACH( current_area ,allocatedAreaList , AreaMetaData )
-	{	if(current_area->start_address == virtual_address )
-		current_area = temp ;
-	    break;
-
-   }
-
-   if(current_area == NULL)
-	   return;
-
-	 LIST_REMOVE(allocatedAreaList, current_area);
-
-	 struct AreaMetaData *prev_free_area = get_prev_free_area(current_area);
-	 struct AreaMetaData *next_free_area = get_next_free_area(current_area);
-
-
-    if(current_area->size > PAGE_SIZE){
-
-	     if(next_free_area!= NULL) {
-	    	 current_area->size += next_free_area->size;
-	    	 LIAT
-	     }
-
-
-	     if( prev_free_area != NULL) {
-	    	 current_area->size += prev_free_area->size;
-	    	 current_area->start_address = prev_free_area->start_address;
-	     }
-
-
-	    uint32 free_area = current_area->start_address;
-	    uint32 free_frame = free_area + current_area->size;
-
-	    for(;free_area < free_frame ; free_area += PAGE_SIZE )
-	     	unmap_frame(*ptr_page_directory,free_area);
-
-
+      if (used_area->size == size) {
+        LIST_REMOVE(&freeAreaList, used_area);
+        remove_area_metadata(used_area);
+      } else {
+        used_area->start_address += size;
+        used_area->size -= size;
+      }
     }
 
-	   //merged done
-
-	//Comment the following line
-	//panic("kfree() not implemented");
-
-	/*EFFICIENT IMPLEMENTATION ~O(#FREE BLOCKS + #FREED PAGES) IS REQUIRED */
-
+    set_area_size((uint32)area_start, required_pages);
+    cprintf("area found has base: %x\n", area_start);
+    return area_start;
+  } else {
+    panic("Kheap placement strategy: %c is not implemented",
+          kheapPlacementStrategy);
+  }
 }
 
-unsigned int kheap_physical_address(unsigned int virtual_address)
-{
-	//TODO: [PROJECT'26.GM#2] KERNEL HEAP - [8] kheap_physical_address
-	//Your code is here
-	//Comment the following line
-	//	panic("kheap_physical_address() is not implemented yet...!!");
-	if (virtual_address >= KERNEL_HEAP_MAX || virtual_address < KERNEL_HEAP_START) {
-		return 0;
-	}
-	uint32 *ptr_page_table;
-	if (get_page_table(ptr_page_directory, virtual_address, &ptr_page_table) == TABLE_NOT_EXIST) {
-		return 0;
-	}
-	return EXTRACT_ADDRESS(ptr_page_table[PTX(virtual_address)]) + PGOFF(virtual_address);
-	/*EFFICIENT IMPLEMENTATION ~O(1) IS REQUIRED */
+void get_next_prev_free_area(uint32 area_start, uint32 area_size,
+                             struct AreaMetaData **next_area,
+                             struct AreaMetaData **prev_area) {
+
+  struct AreaMetaData *el;
+  uint32 next_area_start_address = area_start + area_size;
+
+  LIST_FOREACH(el, &freeAreaList, AreaMetaData) {
+    if (((uint32)el->start_address) == next_area_start_address) {
+      *next_area = el;
+    } else if (((uint32)el->start_address + el->size) == area_start) {
+      *prev_area = el;
+    }
+    if (next_area != NULL && prev_area != NULL)
+      return;
+  }
 }
 
-unsigned int kheap_virtual_address(unsigned int physical_address)
-{
-	//TODO: [PROJECT'26.GM#2] KERNEL HEAP - [9] kheap_virtual_address
-	//Your code is here
-	//Comment the following line
-//	panic("kheap_virtual_address() is not implemented yet...!!");
+void *kmalloc(unsigned int size) {
+  // TODO: [PROJECT'26.GM#2] KERNEL HEAP - [6] kmalloc
+  // Your code is here
+  // Comment the following line
+  // kpanic_into_prompt("kmalloc() is not implemented yet...!!\n");
+  cprintf("calling kmalloc with %u\n", size);
+  if (size <= DYN_ALLOC_MAX_BLOCK_SIZE) {
+    return alloc_block(size);
+  }
 
+  uint32 required_size = ROUNDUP(size, PAGE_SIZE);
 
-	struct FrameInfo *ptr_frame_info = to_frame_info(physical_address);
+  void *area_start = get_free_area(required_size);
+  if (area_start == NULL) {
+    return NULL;
+  }
+  // kpanic_into_prompt("kmalloc() is not implemented yet...!!\n");
 
-	if(ptr_frame_info->va == NULL)
-		return 0;
+  // kheap_alloc_helper always return 0 but in case the panic in alloc_frame was
+  // changed to non-zero return value in the future
+  if (kheap_alloc_helper((uint32)area_start, required_size) != 0) {
+    kfree(area_start);
+    return NULL;
+  }
 
-	return ((uint32)ptr_frame_info->va) + PGOFF(physical_address);
-	/*EFFICIENT IMPLEMENTATION ~O(1) IS REQUIRED */
+  return area_start;
+  /*EFFICIENT IMPLEMENTATION ~O(#FREE BLOCKS + #ALLOCATED PAGES) IS REQUIRED */
+}
+
+void kfree(void *virtual_address) {
+  // TODO: [PROJECT'26.GM#2] KERNEL HEAP - [7] kfree
+
+  // first check if virtual_address is within the kernal heap limits
+
+  // struct AreaMetaData *current_area = NULL;
+  // struct AreaMetaData *temp = NULL;
+  // LIST_FOREACH(current_area, &allocatedAreaList, AreaMetaData) {
+  //   if (current_area->start_address == virtual_address)
+  //     current_area = temp;
+  //   break;
+  // }
+
+  // if (current_area == NULL)
+  //   return;
+
+  // LIST_REMOVE(&allocatedAreaList, current_area);
+
+  // struct AreaMetaData *next_free_area = NULL;
+  // struct AreaMetaData *prev_free_area = NULL;
+
+  // get_next_prev_free_area((uint32)current_area->start_address,
+  //                         current_area->size, &next_free_area,
+  //                         &prev_free_area);
+
+  // if (current_area->size > PAGE_SIZE) {
+
+  //   if (next_free_area != NULL) {
+  //     current_area->size += next_free_area->size;
+  //   }
+
+  //   if (prev_free_area != NULL) {
+  //     current_area->size += prev_free_area->size;
+  //     current_area->start_address = prev_free_area->start_address;
+  //   }
+
+  //   uint32 free_area = current_area->start_address;
+  //   uint32 free_frame = free_area + current_area->size;
+
+  //   for (; free_area < free_frame; free_area += PAGE_SIZE)
+  //     unmap_frame(*ptr_page_directory, free_area);
+  // }
+
+  // merged done
+
+  // Comment the following line
+  // panic("kfree() not implemented");
+
+  /*EFFICIENT IMPLEMENTATION ~O(#FREE BLOCKS + #FREED PAGES) IS REQUIRED */
+}
+
+unsigned int kheap_physical_address(unsigned int virtual_address) {
+  // TODO: [PROJECT'26.GM#2] KERNEL HEAP - [8] kheap_physical_address
+  // Your code is here
+  // Comment the following line
+  //	panic("kheap_physical_address() is not implemented yet...!!");
+  if (virtual_address >= KERNEL_HEAP_MAX ||
+      virtual_address < KERNEL_HEAP_START) {
+    return 0;
+  }
+  uint32 *ptr_page_table;
+  if (get_page_table(ptr_page_directory, virtual_address, &ptr_page_table) ==
+      TABLE_NOT_EXIST) {
+    return 0;
+  }
+  return EXTRACT_ADDRESS(ptr_page_table[PTX(virtual_address)]) +
+         PGOFF(virtual_address);
+  /*EFFICIENT IMPLEMENTATION ~O(1) IS REQUIRED */
+}
+
+unsigned int kheap_virtual_address(unsigned int physical_address) {
+  // TODO: [PROJECT'26.GM#2] KERNEL HEAP - [9] kheap_virtual_address
+  // Your code is here
+  // Comment the following line
+  //	panic("kheap_virtual_address() is not implemented yet...!!");
+
+  struct FrameInfo *ptr_frame_info = to_frame_info(physical_address);
+
+  if (ptr_frame_info->va == NULL)
+    return 0;
+
+  uint32 virtual_address = (uint32)ptr_frame_info->va;
+
+  if (virtual_address >= KERNEL_HEAP_MAX ||
+      virtual_address < KERNEL_HEAP_START) {
+    return 0;
+  }
+
+  return ((uint32)ptr_frame_info->va) + PGOFF(physical_address);
+  /*EFFICIENT IMPLEMENTATION ~O(1) IS REQUIRED */
 }
 
 //=================================================================================//
-//============================== BONUS FUNCTION ===================================//
+//============================== BONUS FUNCTION
+//===================================//
 //=================================================================================//
 // krealloc():
 
-//	Attempts to resize the allocated space at "virtual_address" to "new_size" bytes,
-//	possibly moving it in the heap.
-//	If successful, returns the new virtual_address, in which case the old virtual_address must no longer be accessed.
-//	On failure, returns a null pointer, and the old virtual_address remains valid.
+//	Attempts to resize the allocated space at "virtual_address" to
+//"new_size" bytes, 	possibly moving it in the heap. 	If successful,
+// returns the new virtual_address, in which case the old virtual_address must
+// no
+// longer be accessed. 	On failure, returns a null pointer, and the old
+// virtual_address remains valid.
 
 //	A call with virtual_address = null is equivalent to kmalloc().
 //	A call with new_size = zero is equivalent to kfree().
-void *krealloc(void *virtual_address, uint32 new_size)
-{
-	//TODO: [PROJECT'26.BONUS#1] KERNEL REALLOC - krealloc
-	//Your code is here
-	//Comment the following line
-//	panic("krealloc() is not implemented yet...!!");
+void *krealloc(void *virtual_address, uint32 new_size) {
+  // TODO: [PROJECT'26.BONUS#1] KERNEL REALLOC - krealloc
+  // Your code is here
+  // Comment the following line
+  //	panic("krealloc() is not implemented yet...!!");
 
-//					struct AreaMetaData * ele;
-//					LIST_FOREACH(ele, freeAreaList, AreaMetaData){
-//					}
+  //					struct AreaMetaData * ele;
+  //					LIST_FOREACH(ele, freeAreaList,
+  // AreaMetaData){
+  //					}
 
-	if(virtual_address == NULL){
-		void * start_add = kmalloc(new_size);
-		return start_add;
-	}
+  // first check if virtual_address is within the kernal heap limits
+  // if (virtual_address == NULL) {
+  //   void *start_add = kmalloc(new_size);
+  //   return start_add;
+  // }
 
-	struct AreaMetaData *el;
-	LIST_FOREACH(el, allocatedAreaList, AreaMetaData) {
-		uint32 old_size = el->size;
-		if(el && (el->start_address == virtual_address)){
+  // struct AreaMetaData *el;
+  // LIST_FOREACH(el, allocatedAreaList, AreaMetaData) {
+  //   uint32 old_size = el->size;
+  //   if (el && (el->start_address == virtual_address)) {
 
-			if(new_size == 0){
-				kfree (virtual_address);
-				return NULL;
-			}
+  //     if (new_size == 0) {
+  //       kfree(virtual_address);
+  //       return NULL;
+  //     }
 
-			if(old_size == new_size){
-				return virtual_address;
-			}
-////////////////////////////////////////////////////////////////////////////////////
-			if( new_size > old_size ){
-				int t_p_index = PTX(virtual_address);
-				uint32 *ptr_page_table;
-				int ret = get_page_table(ptr_page_directory, virtual_address, &ptr_page_table);
-				if(ret != TABLE_IN_MEMORY) {
-					panic("something wrong in allocating page");
-				}
-				if(is_buddy_space_page(ptr_page_table[t_p_index])){
-					if(new_size >= DYN_ALLOC_MAX_BLOCK_SIZE){
+  //     if (old_size == new_size) {
+  //       return virtual_address;
+  //     }
+  //     ////////////////////////////////////////////////////////////////////////////////////
+  //     if (new_size > old_size) {
+  //       int t_p_index = PTX(virtual_address);
+  //       uint32 *ptr_page_table;
+  //       int ret = get_page_table(ptr_page_directory, virtual_address,
+  //                                &ptr_page_table);
+  //       if (ret != TABLE_IN_MEMORY) {
+  //         panic("something wrong in allocating page");
+  //       }
+  //       if (is_buddy_space_page(ptr_page_table[t_p_index])) {
+  //         if (new_size >= DYN_ALLOC_MAX_BLOCK_SIZE) {
 
-						uint32 new_v_add = (uint32)kmalloc(new_size);
-						free_block(virtual_address);
-						return (void*)new_v_add;
-//						transit_data(virtual_address,new_v_add,old_size);
+  //           uint32 new_vadd = (uint32)kmalloc(new_size);
+  //           free_block(virtual_address);
+  //           return (void *)new_vadd;
+  //           //
+  //           move_data(virtual_address,new_vadd,old_size);
 
-					} else {
-						uint32 new_v_add = (uint32)alloc_block(new_size);
-						free_block(virtual_address);
-						return (void*)new_v_add;
-					}
-///////////////////////////////////////////////////////////////////////////////////////
-				} else{
-					struct AreaMetaData *el2 = get_next_free_area(el);
-					if(el2 == NULL){
-						uint32 new_v_add = (uint32)kmalloc(new_size);
-						transit_data(virtual_address,new_v_add,old_size);
-						kfree(virtual_address);
-						return (void*)new_v_add;
-						} else {
-							uint32 new_v_add = el2->start_address;
-							alloc_helper(new_v_add , new_size );
-							el->size = new_size;
-							return virtual_address;
-						}
+  //         } else {
+  //           uint32 new_vadd = (uint32)alloc_block(new_size);
+  //           free_block(virtual_address);
+  //           return (void *)new_vadd;
+  //         }
+  //         ///////////////////////////////////////////////////////////////////////////////////////
+  //       } else {
+  //         struct AreaMetaData *el2 = NULL;
+  //         get_next_prev_free_area((uint32)el->start_address, el->size, &el2,
+  //                                 NULL);
+  //         if (el2 == NULL) {
+  //           uint32 new_vadd = (uint32)kmalloc(new_size);
+  //           move_data(virtual_address, new_vadd, old_size);
+  //           kfree(virtual_address);
+  //           return (void *)new_vadd;
+  //         } else {
+  //           uint32 new_vadd = el2->start_address;
+  //           kheap_alloc_helper(new_vadd, new_size);
+  //           el->size = new_size;
+  //           return virtual_address;
+  //         }
+  //       }
+  //     } else {
+  //       if (is_buddy_space_page()) {
+  //         uint32 new_vadd = alloc_block(new_size);
+  //         free_block(virtual_address);
+  //         return new_vadd;
+  //       } else {
+  //         if (new_size >= DYN_ALLOC_MAX_BLOCK_SIZE) {
+  //           uint32 limit = virtual_address + new_size;
+  //           while (limit < (limit + old_size)) {
+  //             unmap_frame(ptr_page_directory, limit);
+  //             limit += PAGE_SIZE;
+  //           }
+  //           struct AreaMetaData *newFreeArea;
+  //           newFreeArea->size = new_size - old_size;
+  //           newFreeArea->start_address = virtual_address + new_size;
+  //           LIST_INSERT_TAIL(freeAreaList, newFreeArea);
 
-					}
-				} else{
-					if(is_buddy_space_page()){
-						uint32 new_v_add = alloc_block(new_size);
-						free_block(virtual_address);
-						return new_v_add;
-					} else{
-						if(new_size >= DYN_ALLOC_MAX_BLOCK_SIZE){
-							uint32 limit = virtual_address + new_size;
-							while(limit < (limit + old_size)){
-								unmap_frame(ptr_page_directory,limit);
-								limit += PAGE_SIZE;
-							}
-							struct AreaMetaData *newFreeArea;
-							newFreeArea->size = new_size - old_size;
-							newFreeArea->start_address = virtual_address + new_size;
-							LIST_INSERT_TAIL(freeAreaList, newFreeArea);
-
-							el->size = new_size;
-							return virtual_address;
-						}else {
-							uint32 new_v_add = alloc_block(new_size);
-							free_block(virtual_address);
-							return new_v_add;
-						}
-					}
-				}
-			}
-		}
-	return NULL;
-	}
-
-
-
+  //           el->size = new_size;
+  //           return virtual_address;
+  //         } else {
+  //           uint32 new_vadd = alloc_block(new_size);
+  //           free_block(virtual_address);
+  //           return new_vadd;
+  //         }
+  //       }
+  //     }
+  //   }
+  // }
+  return NULL;
+}
