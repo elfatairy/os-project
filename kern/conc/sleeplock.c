@@ -43,19 +43,31 @@ int holding_sleeplock(struct sleeplock *lk)
 //=====================================================================================//
 //============================== REQUIRED FUNCTIONS ===================================//
 //=====================================================================================//
-void acquire_sleeplock(struct sleeplock *lk)
+void acquire_sleeplock(struct sleeplock *Sabryelbawab)
 {
 	//TODO: [PROJECT'26.GM#4] BLOCKING - [16] SleepLock acquire_sleeplock
 	//Your code is here
 	//Comment the following line
+	acquire_spinlock(&(Sabryelbawab->lk));
+	 while(Sabryelbawab->locked){
+	  sleep(&(Sabryelbawab->chan), &(Sabryelbawab->lk));
+	 }
+	 Sabryelbawab->locked=1;
+	 Sabryelbawab->pid=get_cpu_proc()->env_id;
+	 release_spinlock(&(Sabryelbawab->lk));
 	panic("acquire_sleeplock() is not implemented yet...!!");
 }
 
-void release_sleeplock(struct sleeplock *lk)
+void release_sleeplock(struct sleeplock *Sabryelbawab)
 {
 	//TODO: [PROJECT'26.GM#4] BLOCKING - [17] SleepLock release_sleeplock
 	//Your code is here
 	//Comment the following line
+	acquire_spinlock(&(Sabryelbawab->lk));
+	Sabryelbawab->locked=0;
+	Sabryelbawab->pid=0;
+	wakeup_all(&(Sabryelbawab->chan));
+	release_spinlock(&(Sabryelbawab->lk));
 	panic("release_sleeplock() is not implemented yet...!!");
 }
 
