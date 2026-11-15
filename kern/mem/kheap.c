@@ -44,7 +44,6 @@ int kheap_alloc_helper(uint32 va, uint32 size) {
       return 1;
     }
     int perms = PERM_WRITEABLE;
-    cprintf("mapping va %x in alloc helper\n", va);
     map_frame(ptr_page_directory, frame, va, perms);
     frame->va = (void *)va;
 
@@ -178,7 +177,6 @@ void *get_free_area(unsigned int size) {
     struct AreaMetaData *used_area = NULL;
 
     LIST_FOREACH(el, &freeAreaList, AreaMetaData) {
-      cprintf("free area starting at %x with size %u\n", el->start_address, el->size);
       if (el->size == size) {
         used_area = el;
         break;
@@ -191,17 +189,14 @@ void *get_free_area(unsigned int size) {
     void *area_start = NULL;
 
     if (used_area == NULL) {
-      cprintf("didn't find any area\n");
       if (KERNEL_HEAP_MAX - size < kheapPageAllocBreak) {
         return NULL;
       }
 
-      cprintf("expanded the kheap (was at %x)\n", kheapPageAllocBreak);
       area_start = (void *)kheapPageAllocBreak;
       kheapPageAllocBreak += size;
     } else {
       area_start = used_area->start_address;
-      cprintf("found an area at %x with size %u\n", area_start, used_area->size);
 
       if (used_area->size == size) {
         LIST_REMOVE(&freeAreaList, used_area);
@@ -213,7 +208,6 @@ void *get_free_area(unsigned int size) {
     }
 
     set_area_size((uint32)area_start, required_pages);
-    cprintf("area found has base: %x\n", area_start);
     return area_start;
   } else {
     panic("Kheap placement strategy: %c is not implemented",
@@ -244,7 +238,6 @@ void *kmalloc(unsigned int size) {
   // Your code is here
   // Comment the following line
   // kpanic_into_prompt("kmalloc() is not implemented yet...!!\n");
-  cprintf("calling kmalloc with %u\n", size);
   if (size <= DYN_ALLOC_MAX_BLOCK_SIZE) {
     return alloc_block(size);
   }

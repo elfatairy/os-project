@@ -6,3 +6,4 @@ obj
 .cache
 .clangd
 compile_commands.json
+.settings/language.settings.xml
