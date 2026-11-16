@@ -154,7 +154,7 @@ void *create_buddy_space() {
   return buddy_va;
 }
 
-//void delete_buddy_space(void *va) {
+void delete_buddy_space(void *va) {
 //  // TODO: [PROJECT'26.GM#2] KERNEL HEAP - [5] delete_buddy_space
 //
 //  uint32 *ptr_page_table = NULL;
@@ -168,7 +168,7 @@ void *create_buddy_space() {
 //
 //  // Comment the following line
 //  // panic("delete_buddy_space() not implemented");
-//}
+}
 
 /**************************************************/
 /* PAGE ALLOCATOR */
@@ -266,7 +266,7 @@ void *kmalloc(unsigned int size) {
   /*EFFICIENT IMPLEMENTATION ~O(#FREE BLOCKS + #ALLOCATED PAGES) IS REQUIRED */
 }
 
-//void kfree(void *virtual_address) {
+void kfree(void *virtual_address) {
 //  // TODO: [PROJECT'26.GM#2] KERNEL HEAP - [7] kfree
 //
 //  // first check if virtual_address is within the kernal heap limits
@@ -315,7 +315,7 @@ void *kmalloc(unsigned int size) {
 //  // panic("kfree() not implemented");
 //
 //  /*EFFICIENT IMPLEMENTATION ~O(#FREE BLOCKS + #FREED PAGES) IS REQUIRED */
-//}
+}
 
 unsigned int kheap_physical_address(unsigned int virtual_address) {
   // TODO: [PROJECT'26.GM#2] KERNEL HEAP - [8] kheap_physical_address
@@ -386,16 +386,16 @@ void *krealloc(void *virtual_address, uint32 new_size) {
 //  LIST_FOREACH(el, allocatedAreaList, AreaMetaData) {
 
 //  first check if virtual_address is within the kernal heap limits
-	if (virtual_address >= KERNEL_HEAP_MAX ||virtual_address < KERNEL_HEAP_START){
-
-	}
+//	if (virtual_address >= KERNEL_HEAP_MAX ||virtual_address < KERNEL_HEAP_START){
+//
+//	}
   if (virtual_address == NULL) {
     void *start_add = kmalloc(new_size);
     return start_add;
   }
 
 
-    uint32 old_size =(uint32) get_area_size(virtual_address) * PAGE_SIZE;
+    uint32 old_size =(uint32) get_area_size( (uint32) virtual_address) * PAGE_SIZE;
     if(old_size == 0 ){
         void *start_add = kmalloc(new_size);
         return start_add;
@@ -412,7 +412,7 @@ void *krealloc(void *virtual_address, uint32 new_size) {
       if (new_size > old_size) {
         int t_p_index = PTX(virtual_address);
         uint32 *ptr_page_table;
-        int ret = get_page_table(ptr_page_directory, virtual_address,&ptr_page_table);
+        int ret = get_page_table(ptr_page_directory, (uint32) virtual_address,&ptr_page_table);
         if (ret != TABLE_IN_MEMORY) {
           panic("something wrong in allocating page");
         }
@@ -420,7 +420,7 @@ void *krealloc(void *virtual_address, uint32 new_size) {
           if (new_size >= DYN_ALLOC_MAX_BLOCK_SIZE) {
 
             uint32 new_va_dd = (uint32)kmalloc(new_size);
-            move_data(virtual_address,new_va_dd,old_size);
+            move_data((uint32) virtual_address,new_va_dd,old_size);
             free_block(virtual_address);
             return (void *)new_va_dd;
             //
@@ -434,27 +434,33 @@ void *krealloc(void *virtual_address, uint32 new_size) {
         } else {
           struct AreaMetaData *el2 = NULL;
           uint32 dif_size = new_size - old_size;
-          get_next_prev_free_area(virtual_address, dif_size, el2 ,NULL);
+          get_next_prev_free_area((uint32) virtual_address, dif_size, &el2 ,NULL);
           if (el2 == NULL) {
             uint32 new_v_add = (uint32) kmalloc(new_size);
-            move_data(virtual_address, new_v_add, old_size);
+            move_data((uint32) virtual_address, new_v_add, old_size);
             kfree(virtual_address);
             return (void *)new_v_add;
           } else {
-            uint32 new_vadd = el2->start_address;
+            uint32 new_vadd = (uint32) el2->start_address;
             kheap_alloc_helper(new_vadd, new_size);
-            set_area_size(virtual_address,new_size/PAGE_SIZE);
+            set_area_size((uint32) virtual_address,new_size/PAGE_SIZE);
             return virtual_address;
           }
         }
       } else {
-        if (is_buddy_space_page()) {
-          uint32 new_vadd = alloc_block(new_size);
+          int t_p_index = PTX(virtual_address);
+          uint32 *ptr_page_table;
+          int ret = get_page_table(ptr_page_directory, (uint32) virtual_address,&ptr_page_table);
+          if (ret != TABLE_IN_MEMORY) {
+            panic("something wrong in allocating page");
+          }
+        if (is_buddy_space_page(ptr_page_table[t_p_index])) {
+          void * new_vadd = alloc_block(new_size);
           free_block(virtual_address);
           return new_vadd;
         } else {
           if (new_size >= DYN_ALLOC_MAX_BLOCK_SIZE) {
-            uint32 limit = virtual_address + new_size;
+            uint32 limit = (uint32) virtual_address + new_size;
             uint32 deleted_size = old_size - new_size;
             uint32 deleted_limit = limit + deleted_size;
             uint32 i = limit ;
@@ -462,12 +468,12 @@ void *krealloc(void *virtual_address, uint32 new_size) {
               unmap_frame(ptr_page_directory, limit);
               i += PAGE_SIZE;
             }
-            struct AreaMetaData *newFreeArea = create_area_metadata(limit, deleted_size);
-//            LIST_INSERT_TAIL(freeAreaList, newFreeArea);
-            set_area_size(virtual_address, (uint16) new_size/PAGE_SIZE);
+            struct AreaMetaData *newFreeArea = create_area_metadata((void *)limit, deleted_size);
+            LIST_INSERT_TAIL(&freeAreaList, newFreeArea);
+            set_area_size((uint32)virtual_address, (uint16) new_size/PAGE_SIZE);
             return virtual_address;
           } else {
-            uint32 new_vadd = alloc_block(new_size);
+            void * new_vadd = alloc_block(new_size);
             free_block(virtual_address);
             return new_vadd;
           }
