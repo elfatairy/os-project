@@ -155,21 +155,21 @@ void *create_buddy_space() {
   return buddy_va;
 }
 
- void delete_buddy_space(void *va) {
-//   // TODO: [PROJECT'26.GM#2] KERNEL HEAP - [5] delete_buddy_space
-//
-//   uint32 *ptr_page_table = NULL;
-//   get_page_table(ptr_page_directory, va,
-//                  &ptr_page_table) if (ptr_page_table == NULL) return;
-//   uint32 entry = ptr_page_table[PTX(va)];
-//   if (!is_buddy_space_page(entry))
-//     panic("this page is not a buddy space");
-//   else
-//     unmap_frame(ptr_page_directory, va);
-//
-//   // Comment the following line
-//   // panic("delete_buddy_space() not implemented");
- }
+void delete_buddy_space(void *va) {
+  //   // TODO: [PROJECT'26.GM#2] KERNEL HEAP - [5] delete_buddy_space
+  //
+  //   uint32 *ptr_page_table = NULL;
+  //   get_page_table(ptr_page_directory, va,
+  //                  &ptr_page_table) if (ptr_page_table == NULL) return;
+  //   uint32 entry = ptr_page_table[PTX(va)];
+  //   if (!is_buddy_space_page(entry))
+  //     panic("this page is not a buddy space");
+  //   else
+  //     unmap_frame(ptr_page_directory, va);
+  //
+  //   // Comment the following line
+  //   // panic("delete_buddy_space() not implemented");
+}
 
 /**************************************************/
 /* PAGE ALLOCATOR */
@@ -267,56 +267,56 @@ void *kmalloc(unsigned int size) {
   /*EFFICIENT IMPLEMENTATION ~O(#FREE BLOCKS + #ALLOCATED PAGES) IS REQUIRED */
 }
 
- void kfree(void *virtual_address) {
-//   // TODO: [PROJECT'26.GM#2] KERNEL HEAP - [7] kfree
-//
-//   // first check if virtual_address is within the kernal heap limits
-//
-//   struct AreaMetaData *current_area = NULL;
-//   struct AreaMetaData *temp = NULL;
-//   LIST_FOREACH(current_area, &allocatedAreaList, AreaMetaData) {
-//     if (current_area->start_address == virtual_address)
-//       current_area = temp;
-//     break;
-//   }
-//
-//   if (current_area == NULL)
-//     return;
-//
-//   LIST_REMOVE(&allocatedAreaList, current_area);
-//
-//   struct AreaMetaData *next_free_area = NULL;
-//   struct AreaMetaData *prev_free_area = NULL;
-//
-//   get_next_prev_free_area((uint32)current_area->start_address,
-//                           current_area->size, &next_free_area,
-//                           &prev_free_area);
-//
-//   if (current_area->size > PAGE_SIZE) {
-//
-//     if (next_free_area != NULL) {
-//       current_area->size += next_free_area->size;
-//     }
-//
-//     if (prev_free_area != NULL) {
-//       current_area->size += prev_free_area->size;
-//       current_area->start_address = prev_free_area->start_address;
-//     }
-//
-//     uint32 free_area = current_area->start_address;
-//     uint32 free_frame = free_area + current_area->size;
-//
-//     for (; free_area < free_frame; free_area += PAGE_SIZE)
-//       unmap_frame(*ptr_page_directory, free_area);
-//   }
-//
-//   // merged done
-//
-//   // Comment the following line
-//   // panic("kfree() not implemented");
-//
-//   /*EFFICIENT IMPLEMENTATION ~O(#FREE BLOCKS + #FREED PAGES) IS REQUIRED */
- }
+void kfree(void *virtual_address) {
+  //   // TODO: [PROJECT'26.GM#2] KERNEL HEAP - [7] kfree
+  //
+  //   // first check if virtual_address is within the kernal heap limits
+  //
+  //   struct AreaMetaData *current_area = NULL;
+  //   struct AreaMetaData *temp = NULL;
+  //   LIST_FOREACH(current_area, &allocatedAreaList, AreaMetaData) {
+  //     if (current_area->start_address == virtual_address)
+  //       current_area = temp;
+  //     break;
+  //   }
+  //
+  //   if (current_area == NULL)
+  //     return;
+  //
+  //   LIST_REMOVE(&allocatedAreaList, current_area);
+  //
+  //   struct AreaMetaData *next_free_area = NULL;
+  //   struct AreaMetaData *prev_free_area = NULL;
+  //
+  //   get_next_prev_free_area((uint32)current_area->start_address,
+  //                           current_area->size, &next_free_area,
+  //                           &prev_free_area);
+  //
+  //   if (current_area->size > PAGE_SIZE) {
+  //
+  //     if (next_free_area != NULL) {
+  //       current_area->size += next_free_area->size;
+  //     }
+  //
+  //     if (prev_free_area != NULL) {
+  //       current_area->size += prev_free_area->size;
+  //       current_area->start_address = prev_free_area->start_address;
+  //     }
+  //
+  //     uint32 free_area = current_area->start_address;
+  //     uint32 free_frame = free_area + current_area->size;
+  //
+  //     for (; free_area < free_frame; free_area += PAGE_SIZE)
+  //       unmap_frame(*ptr_page_directory, free_area);
+  //   }
+  //
+  //   // merged done
+  //
+  //   // Comment the following line
+  //   // panic("kfree() not implemented");
+  //
+  //   /*EFFICIENT IMPLEMENTATION ~O(#FREE BLOCKS + #FREED PAGES) IS REQUIRED */
+}
 
 unsigned int kheap_physical_address(unsigned int virtual_address) {
   // TODO: [PROJECT'26.GM#2] KERNEL HEAP - [8] kheap_physical_address
