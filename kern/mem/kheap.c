@@ -173,7 +173,7 @@ void delete_buddy_space(void *buddy_vaaa) {
 
 	   else {
 		   unmark_buddy_space_page(real_vaaa);
-		   kfree((void*)real_vaaa);
+		   unmap_frame(ptr_page_directory,real_vaaa);
 	   }
 
   //   // Comment the following line
@@ -281,45 +281,65 @@ void kfree(void *virtual_address) {
 
   if(virtual_address == NULL)
 	  return;
+  uint32 vaaa = (uint32)virtual_address;
 
-  uint32 va_bta3_anoga = ROUNDDOWN((uint32)virtual_address,PAGE_SIZE);
-  if (get_area_size(va_bta3_anoga) == 1){
-	  unmap_frame(ptr_page_directory,va_bta3_anoga);
+
+  if (vaaa >= KERNEL_HEAP_START && vaaa < kheapPageAllocStart ){
+	  free_block(virtual_address);
+	  return;
   }
-  else{
-	  struct AreaMetaData *my_area = (struct AreaMetaData *)virtual_address;
+  if(vaaa < kheapPageAllocStart || vaaa >= kheapPageAllocBreak){
+	  panic("invalid address");
+  }
 
-	  uint32 num_of_pages = get_area_size(va_bta3_anoga);
-	  uint32 start_point = va_bta3_anoga;
+  uint32 current_area_NG = ROUNDDOWN(vaaa,PAGE_SIZE);
+  uint32 num_of_pages = get_area_size(current_area_NG);
+  if(num_of_pages == 0){
+	  panic("this address not allocated");
+  }
 
-	for(uint32 i = 0 ; i <num_of_pages ; i++){
+  uint32 size_of_area = num_of_pages * PAGE_SIZE;
+  uint32 start_point = current_area_NG;
+
+
+
+   for(uint32 i = 0 ; i <num_of_pages ; i++){
         unmap_frame(ptr_page_directory,start_point);
         start_point+= PAGE_SIZE;
 	}
 
-	uint32 area_size = num_of_pages* PAGE_SIZE;
+    area_sizes[(current_area_NG-kheapPageAllocStart)/PAGE_SIZE]=0
 	struct AreaMetaData *next_area = NULL;
 	struct AreaMetaData *prev_area = NULL;
 
-   get_next_prev_free_area(va_bta3_anoga , area_size, &next_area, &prev_area);
+   get_next_prev_free_area(current_area_NG, size_of_area  , &next_area, &prev_area);
+
+   uint32 merged_area = current_area_NG;
+   uint32 size_after_merge = size_of_area ;
 
 	if(next_area != NULL){
-	   area_size += next_area->size;
+	  size_after_merge = next_area->size;
 	   LIST_REMOVE(&freeAreaList, next_area);
 	   remove_area_metadata(next_area);
 
 	}
 
 	 if(prev_area != NULL){
-	 va_bta3_anoga = (uint32) prev_area->start_address;
-	 area_size += prev_area->size;
+		 merged_area += (uint32)prev_area->start_address;
+		 size_after_merge += prev_area->size;
 	 LIST_REMOVE(&freeAreaList, prev_area);
 	 remove_area_metadata(prev_area);
 	}
 
-      my_area->start_address = (void*) va_bta3_anoga ;
-	  my_area->size = area_size;
-    LIST_INSERT_TAIL(&freeAreaList , my_area );
+	 if(merged_area + size_after_merge ==  kheapPageAllocBreak){
+		 kheapPageAllocBreak = merged_area;
+	 }
+
+	 struct AreaMetaData *my_new_merged_area_NG = create_area_metadata((void*)merged_area,size_after_merge);
+	 if(my_new_merged_area_NG == NULL){
+		 panic("there is no enough memory for new area meta data");
+	 }
+    LIST_INSERT_TAIL(&freeAreaList , my_new_merged_area_NG);
 
 
 
