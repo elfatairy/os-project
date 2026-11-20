@@ -155,18 +155,27 @@ void *create_buddy_space() {
   return buddy_va;
 }
 
-void delete_buddy_space(void *va) {
+void delete_buddy_space(void *buddy_vaaa) {
   //   // TODO: [PROJECT'26.GM#2] KERNEL HEAP - [5] delete_buddy_space
-  //
-  //   uint32 *ptr_page_table = NULL;
-  //   get_page_table(ptr_page_directory, va,
-  //                  &ptr_page_table) if (ptr_page_table == NULL) return;
-  //   uint32 entry = ptr_page_table[PTX(va)];
-  //   if (!is_buddy_space_page(entry))
-  //     panic("this page is not a buddy space");
-  //   else
-  //     unmap_frame(ptr_page_directory, va);
-  //
+	if(buddy_vaaa == NULL)
+		return;
+
+	uint32 *ptr_page_table = NULL;
+	uint32 real_vaaa = ROUNDDOWN ((uint32)buddy_vaaa , PAGE_SIZE);
+
+	 if (get_page_table(ptr_page_directory, real_vaaa, &ptr_page_table) ==
+	      TABLE_NOT_EXIST) {
+	        return;
+	  }
+	uint32 pte = ptr_page_table[PTX(real_vaaa)];
+	   if(!is_buddy_space_page(pte))
+		   return;
+
+	   else {
+		   unmark_buddy_space_page(real_vaaa);
+		   kfree((void*)real_vaaa);
+	   }
+
   //   // Comment the following line
   //   // panic("delete_buddy_space() not implemented");
 }
@@ -234,7 +243,7 @@ void get_next_prev_free_area(uint32 area_start, uint32 area_size,
     } else if (((uint32)el->start_address + el->size) == area_start) {
       *prev_area = el;
     }
-    if (next_area != NULL && prev_area != NULL)
+    if (*next_area != NULL && *prev_area != NULL)
       return;
   }
 }
@@ -268,50 +277,52 @@ void *kmalloc(unsigned int size) {
 }
 
 void kfree(void *virtual_address) {
-  //   // TODO: [PROJECT'26.GM#2] KERNEL HEAP - [7] kfree
-  //
-  //   // first check if virtual_address is within the kernal heap limits
-  //
-  //   struct AreaMetaData *current_area = NULL;
-  //   struct AreaMetaData *temp = NULL;
-  //   LIST_FOREACH(current_area, &allocatedAreaList, AreaMetaData) {
-  //     if (current_area->start_address == virtual_address)
-  //       current_area = temp;
-  //     break;
-  //   }
-  //
-  //   if (current_area == NULL)
-  //     return;
-  //
-  //   LIST_REMOVE(&allocatedAreaList, current_area);
-  //
-  //   struct AreaMetaData *next_free_area = NULL;
-  //   struct AreaMetaData *prev_free_area = NULL;
-  //
-  //   get_next_prev_free_area((uint32)current_area->start_address,
-  //                           current_area->size, &next_free_area,
-  //                           &prev_free_area);
-  //
-  //   if (current_area->size > PAGE_SIZE) {
-  //
-  //     if (next_free_area != NULL) {
-  //       current_area->size += next_free_area->size;
-  //     }
-  //
-  //     if (prev_free_area != NULL) {
-  //       current_area->size += prev_free_area->size;
-  //       current_area->start_address = prev_free_area->start_address;
-  //     }
-  //
-  //     uint32 free_area = current_area->start_address;
-  //     uint32 free_frame = free_area + current_area->size;
-  //
-  //     for (; free_area < free_frame; free_area += PAGE_SIZE)
-  //       unmap_frame(*ptr_page_directory, free_area);
-  //   }
-  //
-  //   // merged done
-  //
+   // TODO: [PROJECT'26.GM#2] KERNEL HEAP - [7] kfree
+
+  if(virtual_address == NULL)
+	  return;
+
+  uint32 va_bta3_anoga = ROUNDDOWN((uint32)virtual_address,PAGE_SIZE);
+  if (get_area_size(va_bta3_anoga) == 1){
+	  unmap_frame(ptr_page_directory,va_bta3_anoga);
+  }
+  else{
+	  struct AreaMetaData *my_area = (struct AreaMetaData *)virtual_address;
+
+	  uint32 num_of_pages = get_area_size(va_bta3_anoga);
+	  uint32 start_point = va_bta3_anoga;
+
+	for(uint32 i = 0 ; i <num_of_pages ; i++){
+        unmap_frame(ptr_page_directory,start_point);
+        start_point+= PAGE_SIZE;
+	}
+
+	uint32 area_size = num_of_pages* PAGE_SIZE;
+	struct AreaMetaData *next_area = NULL;
+	struct AreaMetaData *prev_area = NULL;
+
+   get_next_prev_free_area(va_bta3_anoga , area_size, &next_area, &prev_area);
+	if(next_area != NULL){
+	   area_size += next_area->size;
+	   LIST_REMOVE(&freeAreaList, next_area);
+	}
+
+	 if(prev_area != NULL){
+	 va_bta3_anoga = (uint32) prev_area->start_address;
+	 area_size += prev_area->size;
+	 LIST_REMOVE(&freeAreaList, prev_area);
+	}
+
+      my_area->start_address = (void*) va_bta3_anoga ;
+	  my_area->size = area_size;
+    LIST_INSERT_TAIL(&freeAreaList , my_area );
+
+
+   remove_area_metadata(my_area);
+}
+
+
+
   //   // Comment the following line
   //   // panic("kfree() not implemented");
   //
