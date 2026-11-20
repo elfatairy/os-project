@@ -302,15 +302,19 @@ void kfree(void *virtual_address) {
 	struct AreaMetaData *prev_area = NULL;
 
    get_next_prev_free_area(va_bta3_anoga , area_size, &next_area, &prev_area);
+
 	if(next_area != NULL){
 	   area_size += next_area->size;
 	   LIST_REMOVE(&freeAreaList, next_area);
+	   remove_area_metadata(next_area);
+
 	}
 
 	 if(prev_area != NULL){
 	 va_bta3_anoga = (uint32) prev_area->start_address;
 	 area_size += prev_area->size;
 	 LIST_REMOVE(&freeAreaList, prev_area);
+	 remove_area_metadata(prev_area);
 	}
 
       my_area->start_address = (void*) va_bta3_anoga ;
@@ -318,7 +322,7 @@ void kfree(void *virtual_address) {
     LIST_INSERT_TAIL(&freeAreaList , my_area );
 
 
-   remove_area_metadata(my_area);
+
 }
 
 
