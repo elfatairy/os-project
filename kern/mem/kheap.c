@@ -234,6 +234,7 @@ void get_next_prev_free_area(uint32 area_start, uint32 area_size,
                              struct AreaMetaData **next_area,
                              struct AreaMetaData **prev_area) {
 
+
   struct AreaMetaData *el;
   uint32 next_area_start_address = area_start + area_size;
 
@@ -284,13 +285,25 @@ void kfree(void *virtual_address) {
   uint32 vaaa = (uint32)virtual_address;
 
 
-  if (vaaa >= KERNEL_HEAP_START && vaaa < kheapPageAllocStart ){
-	  free_block(virtual_address);
-	  return;
-  }
   if(vaaa < kheapPageAllocStart || vaaa >= kheapPageAllocBreak){
-	  panic("invalid address");
-  }
+  		  panic("invalid address");
+  	 }
+
+
+  uint32 *ptr_page_table = NULL;
+
+  	 if (get_page_table(ptr_page_directory, vaaa, &ptr_page_table) ==
+  	      TABLE_NOT_EXIST) {
+  		  panic("this address not allocated");
+  	  }
+  	uint32 pte = ptr_page_table[PTX(vaaa)];
+  	   if(is_buddy_space_page(pte)){
+
+	  free_block(virtual_address);
+
+	  return;
+  	   }
+
 
   uint32 current_area_NG = ROUNDDOWN(vaaa,PAGE_SIZE);
   uint32 num_of_pages = get_area_size(current_area_NG);
@@ -308,7 +321,7 @@ void kfree(void *virtual_address) {
         start_point+= PAGE_SIZE;
 	}
 
-    area_sizes[(current_area_NG-kheapPageAllocStart)/PAGE_SIZE]=0
+    area_sizes[(current_area_NG-kheapPageAllocStart)/PAGE_SIZE]=0;
 	struct AreaMetaData *next_area = NULL;
 	struct AreaMetaData *prev_area = NULL;
 
@@ -318,14 +331,14 @@ void kfree(void *virtual_address) {
    uint32 size_after_merge = size_of_area ;
 
 	if(next_area != NULL){
-	  size_after_merge = next_area->size;
+	  size_after_merge += next_area->size;
 	   LIST_REMOVE(&freeAreaList, next_area);
 	   remove_area_metadata(next_area);
 
 	}
 
 	 if(prev_area != NULL){
-		 merged_area += (uint32)prev_area->start_address;
+		 merged_area = (uint32)prev_area->start_address;
 		 size_after_merge += prev_area->size;
 	 LIST_REMOVE(&freeAreaList, prev_area);
 	 remove_area_metadata(prev_area);
@@ -333,6 +346,7 @@ void kfree(void *virtual_address) {
 
 	 if(merged_area + size_after_merge ==  kheapPageAllocBreak){
 		 kheapPageAllocBreak = merged_area;
+		 return;
 	 }
 
 	 struct AreaMetaData *my_new_merged_area_NG = create_area_metadata((void*)merged_area,size_after_merge);
@@ -341,18 +355,12 @@ void kfree(void *virtual_address) {
 	 }
     LIST_INSERT_TAIL(&freeAreaList , my_new_merged_area_NG);
 
-
-
-}
-
-
-
   //   // Comment the following line
   //   // panic("kfree() not implemented");
   //
   //   /*EFFICIENT IMPLEMENTATION ~O(#FREE BLOCKS + #FREED PAGES) IS REQUIRED */
-}
 
+}
 unsigned int kheap_physical_address(unsigned int virtual_address) {
   // TODO: [PROJECT'26.GM#2] KERNEL HEAP - [8] kheap_physical_address
   // Your code is here
