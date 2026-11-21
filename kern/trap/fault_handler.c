@@ -211,7 +211,7 @@ void fault_handler(struct Trapframe *tf) {
         return;
       }
 
-      if (EXTRACT_ADDRESS(pte) != 0 && ((pte & PERM_WRITEABLE) && (pte & PERM_USER)) == 0) {
+      if (EXTRACT_ADDRESS(pte) != 0 && ((pte & PERM_WRITEABLE)) == 0) {
         cprintf("you can't write this page is read-only");
         cprintf("%x\n", pte & 0xFFF);
         env_exit();
@@ -322,7 +322,7 @@ void page_fault_handler(struct Env *faulted_env, uint32 fault_va) {
       if (ret != TABLE_IN_MEMORY) {
         panic("something wrong in allocating page");
       }
-      int PERM = ptr_page_table[t_p_index] & 0xFFF;
+      int PERM = (ptr_page_table[t_p_index] & 0xFFF) | PERM_USER | PERM_WRITEABLE;
       map_frame(faulted_env->env_page_directory, frame, fault_va, PERM);
       int ret2 = pf_read_env_page(faulted_env, (void *)fault_va);
       if (ret2 == E_PAGE_NOT_EXIST_IN_PF) {
@@ -332,15 +332,22 @@ void page_fault_handler(struct Env *faulted_env, uint32 fault_va) {
         if (is_s || is_h) {
           struct WorkingSetElement *n_element = env_page_ws_list_create_element(faulted_env, fault_va);
           LIST_INSERT_TAIL(&(faulted_env->page_WS_active_list), n_element);
+
+          if (LIST_SIZE(&(faulted_env->page_WS_active_list)) == faulted_env->page_WS_max_size) {
+            faulted_env->page_last_WS_element = LIST_FIRST(&(faulted_env->page_WS_active_list));
+          }
         } else {
           cprintf("the address is not exist in page file");
           env_exit();
         }
 
       } else {
-
         struct WorkingSetElement *n_element = env_page_ws_list_create_element(faulted_env, fault_va);
         LIST_INSERT_TAIL(&(faulted_env->page_WS_active_list), n_element);
+
+        if (LIST_SIZE(&(faulted_env->page_WS_active_list)) == faulted_env->page_WS_max_size) {
+          faulted_env->page_last_WS_element = LIST_FIRST(&(faulted_env->page_WS_active_list));
+        }
       }
     } else if (isPageReplacmentAlgorithmLRU(PG_REP_LRU_LISTS_APPROX)) {
       // TODO: [PROJECT'26.IM#1] FAULT HANDLER II - [2] LRU Placement
@@ -362,7 +369,6 @@ void page_fault_handler(struct Env *faulted_env, uint32 fault_va) {
     }
   }
 }
-
 
 void __page_fault_handler_with_buffering(struct Env *curenv, uint32 fault_va) {
   panic("this function is not required...!!");
