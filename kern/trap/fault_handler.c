@@ -79,6 +79,7 @@ int8 num_repeated_fault  = 0;
 extern uint32 sys_calculate_free_frames() ;
 
 struct Env* last_faulted_env = NULL;
+
 void fault_handler(struct Trapframe *tf)
 {
 	/******************************************************/
@@ -164,17 +165,16 @@ void fault_handler(struct Trapframe *tf)
 	}
 	else
 	{
+
 		if (userTrap)
 		{
 			/*============================================================================================*/
 			//TODO: [PROJECT'26.GM#3] FAULT HANDLER I - [11] Check for invalid pointers
 			//(e.g. pointing to unmarked user heap page, kernel or wrong access rights),
 			//your code is here
-
-			if (fault_va >= USER_LIMIT){
-			    cprintf("you can't access kernal space");
-			    env_exit();
-			}
+//			if(((void *)fault_va) == NULL){
+//				env_exit();
+//			}
 			uint32* ptr_dir = faulted_env->env_page_directory;
 			uint32* ptr_table;
 			int ret = get_page_table(ptr_dir,fault_va,&ptr_table);
@@ -183,16 +183,22 @@ void fault_handler(struct Trapframe *tf)
 				env_exit();
 			}
 			int table_index = PTX(fault_va);
-			if((ptr_table[table_index] & PERM_UHPAGE )== 0){
+			uint32 pte = ptr_table[table_index];
+			if ((fault_va >= USER_HEAP_START) && (fault_va <= USER_HEAP_MAX)){
+			if((pte & PERM_UHPAGE )== 0){
 				cprintf("you can't point to unmarked page");
 				env_exit();
+			}else {
+			    cprintf("you can't access kernal space");
+			    env_exit();
 			}
-			if((ptr_table[table_index] & PERM_WRITEABLE )== 0){
+			}
+			if((pte & PERM_WRITEABLE )== 0){
 				cprintf("you can't write this page is read-only");
 				env_exit();
 			}
-
 			/*============================================================================================*/
+
 		}
 
 		/*2022: Check if fault due to Access Rights */
@@ -328,10 +334,6 @@ void page_fault_handler(struct Env * faulted_env, uint32 fault_va)
 				LIST_INSERT_TAIL(&(faulted_env->page_WS_active_list), n_element);
 
 			}
-
-
-
-
 		}
 		else if(isPageReplacmentAlgorithmLRU(PG_REP_LRU_LISTS_APPROX))
 		{

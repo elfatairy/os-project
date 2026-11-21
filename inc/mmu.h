@@ -3,7 +3,7 @@
 
 /*2025*/
 //TODO: [PROJECT'26.ALL] NUMBER OF CPUS
-#define NCPUS 1
+#define NCPUS 4
 
 /*
  * This file contains definitions for the x86 memory management unit (MMU),
