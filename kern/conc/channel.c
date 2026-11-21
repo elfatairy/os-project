@@ -36,13 +36,25 @@ void init_channel(struct Channel *chan, char *name)
 // Atomically release lock and sleep on chan.
 // Reacquires lock when awakened.
 // Ref: xv6-x86 OS code
-void sleep(struct Channel *chan, struct kspinlock* lk)
-{
-	//TODO: [PROJECT'26.GM#4] BLOCKING - [13] Channel sleep
-	//Your code is here
-	//Comment the following line
-	panic("sleep() is not implemented yet...!!");
-}
+
+
+   void sleep(struct Channel *myriammmchannn ,struct spinlock *myriammmspinnlockk){
+
+			 //Your Code is Here...
+			 acquire_spinlock(&ProcessQueues.qlock);
+			 release_spinlock(myriammmspinnlockk);
+			 struct Env *myriammmprocesss = get_cpu_proc();
+			 myriammmprocesss->env_status = ENV_BLOCKED;
+			 enqueue(&myriammmchannn->queue , myriammmprocesss);
+		     sched();
+		     release_spinlock(&ProcessQueues.qlock);
+		     acquire_spinlock(myriammmspinnlockk);
+		     //Comment the following line
+		    //panic("sleep() is not implemented yet...!!");
+		}
+
+
+
 
 //==================================================
 // 3) WAKEUP ONE BLOCKED PROCESS ON A GIVEN CHANNEL:
@@ -51,12 +63,22 @@ void sleep(struct Channel *chan, struct kspinlock* lk)
 // The qlock must be held.
 // Ref: xv6-x86 OS code
 // chan MUST be of type "struct Env_Queue" to hold the blocked processes
-void wakeup_one(struct Channel *chan)
-{
-	//TODO: [PROJECT'26.GM#4] BLOCKING - [14] Channel wakeup_one
-	//Your code is here
+
+
+
+
+	void wakeup_one(struct Channel *myriammmchannn)
+	{
+		//TODO: [PROJECT'26.GM#4] BLOCKING - [14] Channel wakeup_one
+		//Your Code is Here...
+		 acquire_spinlock(&ProcessQueues.qlock);
+		 struct Env *myriammmmprocessdequeeee = dequeue(&myriammmchannn->queue);
+		 if(myriammmmprocessdequeeee!= NULL){
+			 sched_insert_ready(myriammmmprocessdequeeee);
+		release_spinlock(&ProcessQueues.qlock);
+		 }
 	//Comment the following line
-	panic("wakeup_one() is not implemented yet...!!");
+	//panic("wakeup_one() is not implemented yet...!!");
 }
 
 //====================================================
@@ -66,11 +88,21 @@ void wakeup_one(struct Channel *chan)
 // The queues lock must be held.
 // Ref: xv6-x86 OS code
 // chan MUST be of type "struct Env_Queue" to hold the blocked processes
-void wakeup_all(struct Channel *chan)
-{
-	//TODO: [PROJECT'26.GM#4] BLOCKING - [15] Channel wakeup_all
-	//Your code is here
-	//Comment the following line
-	panic("wakeup_all() is not implemented yet...!!");
-}
+
+
+	void wakeup_all(struct Channel *myriammmchannn)
+	{
+		//TODO: [PROJECT'26.GM#4] BLOCKING - [15] Channel wakeup_all
+		//Your Code is Here...
+		 acquire_spinlock(&ProcessQueues.qlock);
+		 while(queue_size(&myriammmchannn->queue)>0){
+			 struct Env *myriammmmprocessdequeeee = dequeue(&myriammmchannn->queue);
+			 sched_insert_ready(myriammmmprocessdequeeee);
+		 }
+		 release_spinlock(&ProcessQueues.qlock);
+		 //Comment the following line
+		 //panic("wakeup_all() is not implemented yet...!!");
+ }
+
+
 
