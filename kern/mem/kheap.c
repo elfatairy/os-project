@@ -80,7 +80,6 @@ uint16 get_area_size(uint32 va) {
   return area_sizes[page_number];
 }
 void set_area_size(uint32 va, uint16 page_count) {
-  cprintf("setting page %u to size %u\n", va, page_count);
   uint32 page_number = (va - kheapPageAllocStart) / PAGE_SIZE;
   area_sizes[page_number] = page_count;
 }
@@ -96,7 +95,7 @@ void kheap_init() {
   //==================================================================================
   {
     buddy_init();
-    // init_kspinlock(&lk, "kheap lock");
+    init_kspinlock(&lk, "kheap lock");
     set_kheap_strategy(KHP_PLACE_CUSTOMFIT);
     kheapPageAllocStart = KERNEL_HEAP_START;
     kheapPageAllocBreak = KERNEL_HEAP_START;
@@ -144,11 +143,9 @@ void *create_buddy_space() {
   // Your code is here
   // Comment the following line
   //	panic("create_buddy_space() not implemented");
-  cprintf("entered create buddy space\n");
-  // release_kspinlock(&lk);
-  cprintf("releast spin lock");
+  release_kspinlock(&lk);
   void *buddy_va = kmalloc(PAGE_SIZE);
-  // acquire_kspinlock(&lk);
+  acquire_kspinlock(&lk);
   if (buddy_va == NULL) {
     return NULL;
   }
@@ -255,13 +252,11 @@ void *kmalloc(unsigned int size) {
   // Your code is here
   // Comment the following line
   // kpanic_into_prompt("kmalloc() is not implemented yet...!!\n");
-  cprintf("allocating size %u\n", size);
-  // acquire_kspinlock(&lk);
+  acquire_kspinlock(&lk);
 
   if (size <= DYN_ALLOC_MAX_BLOCK_SIZE) {
     void *va = alloc_block(size);
-    cprintf("allocated a block\n");
-    // release_kspinlock(&lk);
+    release_kspinlock(&lk);
     return va;
   }
 
@@ -269,30 +264,26 @@ void *kmalloc(unsigned int size) {
 
   void *area_start = get_free_area(required_size);
   if (area_start == NULL) {
-    // release_kspinlock(&lk);
+    release_kspinlock(&lk);
     return NULL;
   }
   // kpanic_into_prompt("kmalloc() is not implemented yet...!!\n");
 
   // kheap_alloc_helper always return 0 but in case the panic in alloc_frame was
   // changed to non-zero return value in the future
-  cprintf("before alloc helper\n");
   if (kheap_alloc_helper((uint32)area_start, required_size) != 0) {
     kfree(area_start);
-    // release_kspinlock(&lk);
+    release_kspinlock(&lk);
     return NULL;
   }
 
-  cprintf("finished kmalloc of size %u\n", size);
-  // release_kspinlock(&lk);
+  release_kspinlock(&lk);
   return area_start;
   /*EFFICIENT IMPLEMENTATION ~O(#FREE BLOCKS + #ALLOCATED PAGES) IS REQUIRED */
 }
 
 void kfree(void *virtual_address) {
   // TODO: [PROJECT'26.GM#2] KERNEL HEAP - [7] kfree
-
-  cprintf("freeing at virtual address: %u\n", virtual_address);
 
   acquire_kspinlock(&lk);
   if (virtual_address == NULL || (uint32)virtual_address < KERNEL_HEAP_START || (uint32)virtual_address >= KERNEL_HEAP_MAX) {
@@ -315,7 +306,6 @@ void kfree(void *virtual_address) {
 
   uint32 current_area_NG = ROUNDDOWN((uint32)virtual_address, PAGE_SIZE);
   uint32 num_of_pages = get_area_size(current_area_NG);
-  cprintf("area has %u pages\n", num_of_pages);
   if (num_of_pages == 0) {
     release_kspinlock(&lk);
     panic("this address not allocated");
@@ -328,7 +318,6 @@ void kfree(void *virtual_address) {
     pages_freed++;
     unmap_frame(ptr_page_directory, start_point);
   }
-  cprintf("freed %u pages\n", pages_freed);
 
   set_area_size(current_area_NG, 0);
 
@@ -340,14 +329,12 @@ void kfree(void *virtual_address) {
   uint32 size_after_merge = size_of_area;
 
   if (next_area != NULL) {
-    cprintf("found next area\n");
     size_after_merge += next_area->size;
     LIST_REMOVE(&freeAreaList, next_area);
     remove_area_metadata(next_area);
   }
 
   if (prev_area != NULL) {
-    cprintf("found prev area\n");
     merged_area = (uint32)prev_area->start_address;
     size_after_merge += prev_area->size;
     LIST_REMOVE(&freeAreaList, prev_area);
@@ -389,7 +376,6 @@ unsigned int kheap_physical_address(unsigned int virtual_address) {
   if (page_va == 0)
     return 0;
 
-  cprintf("virt %u to phys %u\n", virtual_address, EXTRACT_ADDRESS(ptr_page_table[PTX(virtual_address)]) + PGOFF(virtual_address));
   return page_va + PGOFF(virtual_address);
   /*EFFICIENT IMPLEMENTATION ~O(1) IS REQUIRED */
 }
