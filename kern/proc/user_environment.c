@@ -925,10 +925,10 @@ void* create_user_kern_stack(uint32* ptr_user_page_directory)
 	//remember to leave its bottom page as a GUARD PAGE (i.e. not mapped)
 	//return a pointer to the start of the allocated space (including the GUARD PAGE)
 	void *lowest_add_stack = kmalloc(KERNEL_STACK_SIZE);
-	uint32 v_a = (uint32) lowest_add_stack;
 	if(lowest_add_stack == NULL){
 		panic("something wrong in allocating the stack");
 	}
+	uint32 v_a = (uint32) lowest_add_stack;
 	int t_p_index = PTX(lowest_add_stack);
 	uint32 *ptr_page_table;
 	int ret = get_page_table(ptr_user_page_directory, v_a, &ptr_page_table);
@@ -936,10 +936,8 @@ void* create_user_kern_stack(uint32* ptr_user_page_directory)
 		panic("something wrong in allocating page");
 	}
 	ptr_page_table[t_p_index]= ptr_page_table[t_p_index] & (~PERM_PRESENT);
-	uint32 start_a_s = ((uint32)lowest_add_stack) + KERNEL_STACK_SIZE;
-
-
-	return (void*)start_a_s;
+//	uint32 start_a_s = ((uint32)lowest_add_stack) + KERNEL_STACK_SIZE;
+	return (void*)lowest_add_stack;
 
 	//unmap_frame() فكرة
 	// the rerturn is sart of stack or bottom of stack (GUARD PAGE)?
