@@ -180,6 +180,50 @@ void fault_handler(struct Trapframe *tf) {
     table_fault_handler(faulted_env, fault_va);
   } else {
 
+<<<<<<< HEAD
+		if (userTrap)
+		{
+			/*============================================================================================*/
+			//TODO: [PROJECT'26.GM#3] FAULT HANDLER I - [11] Check for invalid pointers
+			//(e.g. pointing to unmarked user heap page, kernel or wrong access rights),
+			//your code is here
+//			if(((void *)fault_va) == NULL){
+//				env_exit();
+//			}
+			uint32* ptr_dir = faulted_env->env_page_directory;
+			uint32* ptr_table;
+			int ret = get_page_table(ptr_dir,fault_va,&ptr_table);
+			if(ret != TABLE_IN_MEMORY){
+				cprintf("something wrong in allocating page");
+				env_exit();
+				return;
+			}
+			int table_index = PTX(fault_va);
+			uint32 pte = ptr_table[table_index];
+			if ((fault_va >= USER_HEAP_START) && (fault_va < USER_HEAP_MAX)){
+			if((pte & PERM_UHPAGE )== 0){
+				cprintf("you can't point to unmarked page");
+				env_exit();
+				return;
+			}
+			}
+			if(fault_va >= USER_LIMIT){
+			cprintf("you can't access kernal space");
+			env_exit();
+			return;
+
+			}
+
+			if(EXTRACT_ADDRESS(pte) != 0 && ((pte & PERM_WRITEABLE) && (pte & PERM_USER) )== 0){
+				cprintf("you can't write this page is read-only");
+				cprintf("%x\n", pte & 0xFFF);
+				env_exit();
+				return;
+			}
+
+
+			/*============================================================================================*/
+=======
     if (userTrap) {
       /*============================================================================================*/
       // TODO: [PROJECT'26.GM#3] FAULT HANDLER I - [11] Check for invalid pointers
@@ -214,6 +258,7 @@ void fault_handler(struct Trapframe *tf) {
     } else {
       env_exit();
     }
+>>>>>>> 184485f0a583a66d212705aa76b44025180cb9e2
 
     /*2022: Check if fault due to Access Rights */
     int perms = pt_get_page_permissions(faulted_env->env_page_directory, fault_va);
@@ -221,8 +266,20 @@ void fault_handler(struct Trapframe *tf) {
       panic("Page @va=%x is exist! page fault due to violation of ACCESS RIGHTS\n", fault_va);
     /*============================================================================================*/
 
+<<<<<<< HEAD
+		/*2022: Check if fault due to Access Rights */
+		int perms = pt_get_page_permissions(faulted_env->env_page_directory, fault_va);
+		if (perms & PERM_PRESENT){
+			env_exit();
+			return;
+		}
+
+//			panic("Page @va=%x is exist! page fault due to violation of ACCESS RIGHTS\n", fault_va) ;
+		/*============================================================================================*/
+=======
     // we have normal page fault =============================================================
     faulted_env->pageFaultsCounter++;
+>>>>>>> 184485f0a583a66d212705aa76b44025180cb9e2
 
     //		cprintf("[%08s] user PAGE fault va %08x\n", faulted_env->prog_name, fault_va);
     //		cprintf("\nPage working set BEFORE fault handler...\n");
@@ -299,6 +356,35 @@ void page_fault_handler(struct Env *faulted_env, uint32 fault_va) {
   int iWS = faulted_env->page_last_WS_index;
   uint32 activeWSSize = env_page_ws_get_size(faulted_env);
 #endif
+<<<<<<< HEAD
+	if(activeWSSize + secondWSSize < (faulted_env->page_WS_max_size))
+	{
+		if(isPageReplacmentAlgorithmFIFO())
+		{
+			//TODO: [PROJECT'26.GM#3] FAULT HANDLER I - [12] Placement
+			//Your code is here
+			//Comment the following line
+//			panic("page_fault_handler().FIFO PLACEMENT is not implemented yet...!!");
+			cprintf("ddddddddddddddddddddddddddddd");
+			struct FrameInfo *frame = NULL;
+			int ret1 = allocate_frame(&frame);
+			if(ret1 != 0){
+				panic("there is no free frames");
+			}
+			int t_p_index = PTX(fault_va);
+			uint32 *ptr_page_table;
+			int ret = get_page_table(faulted_env ->env_page_directory, fault_va, &ptr_page_table);
+			if(ret != TABLE_IN_MEMORY) {
+				panic("something wrong in allocating page");
+			}
+			int PERM = ptr_page_table[t_p_index] & 0xFFF;
+			map_frame(faulted_env->env_page_directory, frame, fault_va, PERM);
+			int ret2 = pf_read_env_page(faulted_env, (void*)fault_va);
+			if (ret2 == E_PAGE_NOT_EXIST_IN_PF)
+			{
+			    bool is_s = (fault_va >= USTACKBOTTOM && fault_va < USTACKTOP);
+			    bool is_h  = (fault_va >= USER_HEAP_START && fault_va < USER_HEAP_MAX);
+=======
   if (activeWSSize + secondWSSize < (faulted_env->page_WS_max_size)) {
     if (isPageReplacmentAlgorithmFIFO()) {
       // TODO: [PROJECT'26.GM#3] FAULT HANDLER I - [12] Placement
@@ -322,6 +408,7 @@ void page_fault_handler(struct Env *faulted_env, uint32 fault_va) {
       if (ret2 == E_PAGE_NOT_EXIST_IN_PF) {
         bool is_s = (fault_va >= USTACKBOTTOM && fault_va < USTACKTOP);
         bool is_h = (fault_va >= USER_HEAP_START && fault_va < USER_HEAP_MAX);
+>>>>>>> 184485f0a583a66d212705aa76b44025180cb9e2
 
         if (is_s || is_h) {
           struct WorkingSetElement *n_element = env_page_ws_list_create_element(faulted_env, fault_va);
