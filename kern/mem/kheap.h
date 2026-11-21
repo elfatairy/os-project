@@ -29,6 +29,7 @@ struct AreaMetaData {
   LIST_ENTRY(AreaMetaData) prev_next_info; /* linked list links */
 } __attribute__((packed));
 
+struct kspinlock lk;
 uint16 area_sizes[(KERNEL_HEAP_MAX - KERNEL_HEAP_START) / PAGE_SIZE];
 
 LIST_HEAD(AreaList, AreaMetaData); // Declares 'struct BlockList'

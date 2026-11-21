@@ -194,27 +194,32 @@ void fault_handler(struct Trapframe *tf) {
       if (ret != TABLE_IN_MEMORY) {
         cprintf("something wrong in allocating page");
         env_exit();
+        return;
       }
       int table_index = PTX(fault_va);
       uint32 pte = ptr_table[table_index];
-      if ((fault_va >= USER_HEAP_START) && (fault_va <= USER_HEAP_MAX)) {
+      if ((fault_va >= USER_HEAP_START) && (fault_va < USER_HEAP_MAX)) {
         if ((pte & PERM_UHPAGE) == 0) {
           cprintf("you can't point to unmarked page");
           env_exit();
-        } else {
-          cprintf("you can't access kernal space");
-          env_exit();
-        }
-        if ((pte & PERM_WRITEABLE) == 0) {
-          cprintf("you can't write this page is read-only");
-          env_exit();
+          return;
         }
       }
-      /*============================================================================================*/
-    } else {
-      env_exit();
-    }
+      if (fault_va >= USER_LIMIT) {
+        cprintf("you can't access kernal space");
+        env_exit();
+        return;
+      }
 
+      if (EXTRACT_ADDRESS(pte) != 0 && ((pte & PERM_WRITEABLE) && (pte & PERM_USER)) == 0) {
+        cprintf("you can't write this page is read-only");
+        cprintf("%x\n", pte & 0xFFF);
+        env_exit();
+        return;
+      }
+
+      /*============================================================================================*/
+    }
     /*2022: Check if fault due to Access Rights */
     int perms = pt_get_page_permissions(faulted_env->env_page_directory, fault_va);
     if (perms & PERM_PRESENT)
@@ -305,6 +310,7 @@ void page_fault_handler(struct Env *faulted_env, uint32 fault_va) {
       // Your code is here
       // Comment the following line
       //			panic("page_fault_handler().FIFO PLACEMENT is not implemented yet...!!");
+      cprintf("ddddddddddddddddddddddddddddd");
       struct FrameInfo *frame = NULL;
       int ret1 = allocate_frame(&frame);
       if (ret1 != 0) {
@@ -330,6 +336,7 @@ void page_fault_handler(struct Env *faulted_env, uint32 fault_va) {
           cprintf("the address is not exist in page file");
           env_exit();
         }
+
       } else {
 
         struct WorkingSetElement *n_element = env_page_ws_list_create_element(faulted_env, fault_va);
@@ -355,6 +362,7 @@ void page_fault_handler(struct Env *faulted_env, uint32 fault_va) {
     }
   }
 }
+
 
 void __page_fault_handler_with_buffering(struct Env *curenv, uint32 fault_va) {
   panic("this function is not required...!!");
