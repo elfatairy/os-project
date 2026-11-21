@@ -180,50 +180,6 @@ void fault_handler(struct Trapframe *tf) {
     table_fault_handler(faulted_env, fault_va);
   } else {
 
-<<<<<<< HEAD
-		if (userTrap)
-		{
-			/*============================================================================================*/
-			//TODO: [PROJECT'26.GM#3] FAULT HANDLER I - [11] Check for invalid pointers
-			//(e.g. pointing to unmarked user heap page, kernel or wrong access rights),
-			//your code is here
-//			if(((void *)fault_va) == NULL){
-//				env_exit();
-//			}
-			uint32* ptr_dir = faulted_env->env_page_directory;
-			uint32* ptr_table;
-			int ret = get_page_table(ptr_dir,fault_va,&ptr_table);
-			if(ret != TABLE_IN_MEMORY){
-				cprintf("something wrong in allocating page");
-				env_exit();
-				return;
-			}
-			int table_index = PTX(fault_va);
-			uint32 pte = ptr_table[table_index];
-			if ((fault_va >= USER_HEAP_START) && (fault_va < USER_HEAP_MAX)){
-			if((pte & PERM_UHPAGE )== 0){
-				cprintf("you can't point to unmarked page");
-				env_exit();
-				return;
-			}
-			}
-			if(fault_va >= USER_LIMIT){
-			cprintf("you can't access kernal space");
-			env_exit();
-			return;
-
-			}
-
-			if(EXTRACT_ADDRESS(pte) != 0 && ((pte & PERM_WRITEABLE) && (pte & PERM_USER) )== 0){
-				cprintf("you can't write this page is read-only");
-				cprintf("%x\n", pte & 0xFFF);
-				env_exit();
-				return;
-			}
-
-
-			/*============================================================================================*/
-=======
     if (userTrap) {
       /*============================================================================================*/
       // TODO: [PROJECT'26.GM#3] FAULT HANDLER I - [11] Check for invalid pointers
@@ -238,211 +194,200 @@ void fault_handler(struct Trapframe *tf) {
       if (ret != TABLE_IN_MEMORY) {
         cprintf("something wrong in allocating page");
         env_exit();
+        return;
       }
       int table_index = PTX(fault_va);
       uint32 pte = ptr_table[table_index];
-      if ((fault_va >= USER_HEAP_START) && (fault_va <= USER_HEAP_MAX)) {
+      if ((fault_va >= USER_HEAP_START) && (fault_va < USER_HEAP_MAX)) {
         if ((pte & PERM_UHPAGE) == 0) {
           cprintf("you can't point to unmarked page");
           env_exit();
-        } else {
-          cprintf("you can't access kernal space");
-          env_exit();
-        }
-        if ((pte & PERM_WRITEABLE) == 0) {
-          cprintf("you can't write this page is read-only");
-          env_exit();
+          return;
         }
       }
+      if (fault_va >= USER_LIMIT) {
+        cprintf("you can't access kernal space");
+        env_exit();
+        return;
+      }
+
+      if (EXTRACT_ADDRESS(pte) != 0 && ((pte & PERM_WRITEABLE) && (pte & PERM_USER)) == 0) {
+        cprintf("you can't write this page is read-only");
+        cprintf("%x\n", pte & 0xFFF);
+        env_exit();
+        return;
+      }
+
       /*============================================================================================*/
-    } else {
-      env_exit();
-    }
->>>>>>> 184485f0a583a66d212705aa76b44025180cb9e2
 
-    /*2022: Check if fault due to Access Rights */
-    int perms = pt_get_page_permissions(faulted_env->env_page_directory, fault_va);
-    if (perms & PERM_PRESENT)
-      panic("Page @va=%x is exist! page fault due to violation of ACCESS RIGHTS\n", fault_va);
-    /*============================================================================================*/
+      /*2022: Check if fault due to Access Rights */
+      int perms = pt_get_page_permissions(faulted_env->env_page_directory, fault_va);
+      if (perms & PERM_PRESENT)
+        panic("Page @va=%x is exist! page fault due to violation of ACCESS RIGHTS\n", fault_va);
+      /*============================================================================================*/
 
-<<<<<<< HEAD
-		/*2022: Check if fault due to Access Rights */
-		int perms = pt_get_page_permissions(faulted_env->env_page_directory, fault_va);
-		if (perms & PERM_PRESENT){
-			env_exit();
-			return;
-		}
+      // we have normal page fault =============================================================
+      faulted_env->pageFaultsCounter++;
 
-//			panic("Page @va=%x is exist! page fault due to violation of ACCESS RIGHTS\n", fault_va) ;
-		/*============================================================================================*/
-=======
-    // we have normal page fault =============================================================
-    faulted_env->pageFaultsCounter++;
->>>>>>> 184485f0a583a66d212705aa76b44025180cb9e2
+      //		cprintf("[%08s] user PAGE fault va %08x\n", faulted_env->prog_name, fault_va);
+      //		cprintf("\nPage working set BEFORE fault handler...\n");
+      //		env_page_ws_print(faulted_env);
+      // int ffb = sys_calculate_free_frames();
 
-    //		cprintf("[%08s] user PAGE fault va %08x\n", faulted_env->prog_name, fault_va);
-    //		cprintf("\nPage working set BEFORE fault handler...\n");
-    //		env_page_ws_print(faulted_env);
-    // int ffb = sys_calculate_free_frames();
-
-    if (isBufferingEnabled()) {
-      __page_fault_handler_with_buffering(faulted_env, fault_va);
-    } else {
-      page_fault_handler(faulted_env, fault_va);
-    }
-
-    // 2026: IF SUCCESSFULLY HANDLE THE FAULT, RESET THE REPETITION VALUE (Bug is handled el7 :))
-    // To avoid considering 3 successive SUCCESSFUL faults on same page as an error
-    {
-      num_repeated_fault = 0;
-      last_eip = 0;
-      before_last_eip = 0;
-      last_fault_va = 0;
-      before_last_fault_va = 0;
-    }
-    //		cprintf("\nPage working set AFTER fault handler...\n");
-    //		env_page_ws_print(faulted_env);
-    //		int ffa = sys_calculate_free_frames();
-    //		cprintf("fault handling @%x: difference in free frames (after - before = %d)\n", fault_va, ffa - ffb);
-  }
-
-  /*************************************************************/
-  // Refresh the TLB cache
-  tlbflush();
-  /*************************************************************/
-}
-
-//=========================
-// [2] TABLE FAULT HANDLER:
-//=========================
-void table_fault_handler(struct Env *curenv, uint32 fault_va) {
-  // cprintf("table_fault_handler @%x\n", fault_va);
-  // panic("table_fault_handler() is not implemented yet...!!");
-  // Check if it's a stack page
-  uint32 *ptr_table;
-#if USE_KHEAP
-  {
-    ptr_table = create_page_table(curenv->env_page_directory, (uint32)fault_va);
-  }
-#else
-  {
-    __static_cpt(curenv->env_page_directory, (uint32)fault_va, &ptr_table);
-  }
-#endif
-}
-
-//=========================
-// [3] PAGE FAULT HANDLER:
-//=========================
-/* Calculate the number of page faults according th the OPTIMAL replacement strategy
- * Given:
- * 	1. Initial Working Set List (that the process started with)
- * 	2. Max Working Set Size
- * 	3. Page References List (contains the stream of referenced VAs till the process finished)
- *
- * 	IMPORTANT: This function SHOULD NOT change any of the given lists
- */
-int get_optimal_num_faults(struct WS_List *initWorkingSet, int maxWSSize, struct PageRef_List *pageReferences) {
-  panic("get_optimal_num_faults() is not implemented yet...!!");
-}
-
-void page_fault_handler(struct Env *faulted_env, uint32 fault_va) {
-#if USE_KHEAP
-  struct WorkingSetElement *victimWSElement = NULL;
-  uint32 activeWSSize = LIST_SIZE(&(faulted_env->page_WS_active_list));
-  uint32 secondWSSize = LIST_SIZE(&(faulted_env->page_WS_second_list));
-#else
-  int iWS = faulted_env->page_last_WS_index;
-  uint32 activeWSSize = env_page_ws_get_size(faulted_env);
-#endif
-<<<<<<< HEAD
-	if(activeWSSize + secondWSSize < (faulted_env->page_WS_max_size))
-	{
-		if(isPageReplacmentAlgorithmFIFO())
-		{
-			//TODO: [PROJECT'26.GM#3] FAULT HANDLER I - [12] Placement
-			//Your code is here
-			//Comment the following line
-//			panic("page_fault_handler().FIFO PLACEMENT is not implemented yet...!!");
-			cprintf("ddddddddddddddddddddddddddddd");
-			struct FrameInfo *frame = NULL;
-			int ret1 = allocate_frame(&frame);
-			if(ret1 != 0){
-				panic("there is no free frames");
-			}
-			int t_p_index = PTX(fault_va);
-			uint32 *ptr_page_table;
-			int ret = get_page_table(faulted_env ->env_page_directory, fault_va, &ptr_page_table);
-			if(ret != TABLE_IN_MEMORY) {
-				panic("something wrong in allocating page");
-			}
-			int PERM = ptr_page_table[t_p_index] & 0xFFF;
-			map_frame(faulted_env->env_page_directory, frame, fault_va, PERM);
-			int ret2 = pf_read_env_page(faulted_env, (void*)fault_va);
-			if (ret2 == E_PAGE_NOT_EXIST_IN_PF)
-			{
-			    bool is_s = (fault_va >= USTACKBOTTOM && fault_va < USTACKTOP);
-			    bool is_h  = (fault_va >= USER_HEAP_START && fault_va < USER_HEAP_MAX);
-=======
-  if (activeWSSize + secondWSSize < (faulted_env->page_WS_max_size)) {
-    if (isPageReplacmentAlgorithmFIFO()) {
-      // TODO: [PROJECT'26.GM#3] FAULT HANDLER I - [12] Placement
-      // Your code is here
-      // Comment the following line
-      //			panic("page_fault_handler().FIFO PLACEMENT is not implemented yet...!!");
-      struct FrameInfo *frame = NULL;
-      int ret1 = allocate_frame(&frame);
-      if (ret1 != 0) {
-        panic("there is no free frames");
-      }
-      int t_p_index = PTX(fault_va);
-      uint32 *ptr_page_table;
-      int ret = get_page_table(faulted_env->env_page_directory, fault_va, &ptr_page_table);
-      if (ret != TABLE_IN_MEMORY) {
-        panic("something wrong in allocating page");
-      }
-      int PERM = ptr_page_table[t_p_index] & 0xFFF;
-      map_frame(faulted_env->env_page_directory, frame, fault_va, PERM);
-      int ret2 = pf_read_env_page(faulted_env, (void *)fault_va);
-      if (ret2 == E_PAGE_NOT_EXIST_IN_PF) {
-        bool is_s = (fault_va >= USTACKBOTTOM && fault_va < USTACKTOP);
-        bool is_h = (fault_va >= USER_HEAP_START && fault_va < USER_HEAP_MAX);
->>>>>>> 184485f0a583a66d212705aa76b44025180cb9e2
-
-        if (is_s || is_h) {
-          struct WorkingSetElement *n_element = env_page_ws_list_create_element(faulted_env, fault_va);
-          LIST_INSERT_TAIL(&(faulted_env->page_WS_active_list), n_element);
-        } else {
-          cprintf("the address is not exist in page file");
-          env_exit();
-        }
+      if (isBufferingEnabled()) {
+        __page_fault_handler_with_buffering(faulted_env, fault_va);
       } else {
-
-        struct WorkingSetElement *n_element = env_page_ws_list_create_element(faulted_env, fault_va);
-        LIST_INSERT_TAIL(&(faulted_env->page_WS_active_list), n_element);
+        page_fault_handler(faulted_env, fault_va);
       }
-    } else if (isPageReplacmentAlgorithmLRU(PG_REP_LRU_LISTS_APPROX)) {
-      // TODO: [PROJECT'26.IM#1] FAULT HANDLER II - [2] LRU Placement
-      // Your code is here
-      // Comment the following line
-      panic("page_fault_handler().LRU PLACEMENT is not implemented yet...!!");
-    }
-  } else {
-    if (isPageReplacmentAlgorithmFIFO()) {
-      // TODO: [PROJECT'26.IM#1] FAULT HANDLER II - [1] FIFO Replacement
-      // Your code is here
-      // Comment the following line
-      panic("page_fault_handler().FIFO REPLACEMENT is not implemented yet...!!");
-    } else if (isPageReplacmentAlgorithmLRU(PG_REP_LRU_LISTS_APPROX)) {
-      // TODO: [PROJECT'26.IM#1] FAULT HANDLER II - [3] LRU Replacement
-      // Your code is here
-      // Comment the following line
-      panic("page_fault_handler().LRU REPLACEMENT is not implemented yet...!!");
-    }
-  }
-}
 
-void __page_fault_handler_with_buffering(struct Env *curenv, uint32 fault_va) {
-  panic("this function is not required...!!");
-}
+      // 2026: IF SUCCESSFULLY HANDLE THE FAULT, RESET THE REPETITION VALUE (Bug is handled el7 :))
+      // To avoid considering 3 successive SUCCESSFUL faults on same page as an error
+      {
+        num_repeated_fault = 0;
+        last_eip = 0;
+        before_last_eip = 0;
+        last_fault_va = 0;
+        before_last_fault_va = 0;
+      }
+      //		cprintf("\nPage working set AFTER fault handler...\n");
+      //		env_page_ws_print(faulted_env);
+      //		int ffa = sys_calculate_free_frames();
+      //		cprintf("fault handling @%x: difference in free frames (after - before = %d)\n", fault_va, ffa - ffb);
+    }
+
+    /*************************************************************/
+    // Refresh the TLB cache
+    tlbflush();
+    /*************************************************************/
+  }
+
+  //=========================
+  // [2] TABLE FAULT HANDLER:
+  //=========================
+  void table_fault_handler(struct Env * curenv, uint32 fault_va) {
+    // cprintf("table_fault_handler @%x\n", fault_va);
+    // panic("table_fault_handler() is not implemented yet...!!");
+    // Check if it's a stack page
+    uint32 *ptr_table;
+#if USE_KHEAP
+    {
+      ptr_table = create_page_table(curenv->env_page_directory, (uint32)fault_va);
+    }
+#else
+    {
+      __static_cpt(curenv->env_page_directory, (uint32)fault_va, &ptr_table);
+    }
+#endif
+  }
+
+  //=========================
+  // [3] PAGE FAULT HANDLER:
+  //=========================
+  /* Calculate the number of page faults according th the OPTIMAL replacement strategy
+   * Given:
+   * 	1. Initial Working Set List (that the process started with)
+   * 	2. Max Working Set Size
+   * 	3. Page References List (contains the stream of referenced VAs till the process finished)
+   *
+   * 	IMPORTANT: This function SHOULD NOT change any of the given lists
+   */
+  int get_optimal_num_faults(struct WS_List * initWorkingSet, int maxWSSize, struct PageRef_List *pageReferences) {
+    panic("get_optimal_num_faults() is not implemented yet...!!");
+  }
+
+  void page_fault_handler(struct Env * faulted_env, uint32 fault_va) {
+#if USE_KHEAP
+    struct WorkingSetElement *victimWSElement = NULL;
+    uint32 activeWSSize = LIST_SIZE(&(faulted_env->page_WS_active_list));
+    uint32 secondWSSize = LIST_SIZE(&(faulted_env->page_WS_second_list));
+#else
+    int iWS = faulted_env->page_last_WS_index;
+    uint32 activeWSSize = env_page_ws_get_size(faulted_env);
+#endif
+    <<<<<<< HEAD if (activeWSSize + secondWSSize < (faulted_env->page_WS_max_size)) {
+      if (isPageReplacmentAlgorithmFIFO()) {
+        // TODO: [PROJECT'26.GM#3] FAULT HANDLER I - [12] Placement
+        // Your code is here
+        // Comment the following line
+        //			panic("page_fault_handler().FIFO PLACEMENT is not implemented yet...!!");
+        cprintf("ddddddddddddddddddddddddddddd");
+        struct FrameInfo *frame = NULL;
+        int ret1 = allocate_frame(&frame);
+        if (ret1 != 0) {
+          panic("there is no free frames");
+        }
+        int t_p_index = PTX(fault_va);
+        uint32 *ptr_page_table;
+        int ret = get_page_table(faulted_env->env_page_directory, fault_va, &ptr_page_table);
+        if (ret != TABLE_IN_MEMORY) {
+          panic("something wrong in allocating page");
+        }
+        int PERM = ptr_page_table[t_p_index] & 0xFFF;
+        map_frame(faulted_env->env_page_directory, frame, fault_va, PERM);
+        int ret2 = pf_read_env_page(faulted_env, (void *)fault_va);
+        if (ret2 == E_PAGE_NOT_EXIST_IN_PF) {
+          bool is_s = (fault_va >= USTACKBOTTOM && fault_va < USTACKTOP);
+          bool is_h = (fault_va >= USER_HEAP_START && fault_va < USER_HEAP_MAX);
+          == == == =
+                       if (activeWSSize + secondWSSize < (faulted_env->page_WS_max_size)) {
+            if (isPageReplacmentAlgorithmFIFO()) {
+              // TODO: [PROJECT'26.GM#3] FAULT HANDLER I - [12] Placement
+              // Your code is here
+              // Comment the following line
+              //			panic("page_fault_handler().FIFO PLACEMENT is not implemented yet...!!");
+              struct FrameInfo *frame = NULL;
+              int ret1 = allocate_frame(&frame);
+              if (ret1 != 0) {
+                panic("there is no free frames");
+              }
+              int t_p_index = PTX(fault_va);
+              uint32 *ptr_page_table;
+              int ret = get_page_table(faulted_env->env_page_directory, fault_va, &ptr_page_table);
+              if (ret != TABLE_IN_MEMORY) {
+                panic("something wrong in allocating page");
+              }
+              int PERM = ptr_page_table[t_p_index] & 0xFFF;
+              map_frame(faulted_env->env_page_directory, frame, fault_va, PERM);
+              int ret2 = pf_read_env_page(faulted_env, (void *)fault_va);
+              if (ret2 == E_PAGE_NOT_EXIST_IN_PF) {
+                bool is_s = (fault_va >= USTACKBOTTOM && fault_va < USTACKTOP);
+                bool is_h = (fault_va >= USER_HEAP_START && fault_va < USER_HEAP_MAX);
+>>>>>>> 184485f0a583a66d212705aa76b44025180cb9e2
+
+                if (is_s || is_h) {
+                  struct WorkingSetElement *n_element = env_page_ws_list_create_element(faulted_env, fault_va);
+                  LIST_INSERT_TAIL(&(faulted_env->page_WS_active_list), n_element);
+                } else {
+                  cprintf("the address is not exist in page file");
+                  env_exit();
+                }
+              } else {
+
+                struct WorkingSetElement *n_element = env_page_ws_list_create_element(faulted_env, fault_va);
+                LIST_INSERT_TAIL(&(faulted_env->page_WS_active_list), n_element);
+              }
+            } else if (isPageReplacmentAlgorithmLRU(PG_REP_LRU_LISTS_APPROX)) {
+              // TODO: [PROJECT'26.IM#1] FAULT HANDLER II - [2] LRU Placement
+              // Your code is here
+              // Comment the following line
+              panic("page_fault_handler().LRU PLACEMENT is not implemented yet...!!");
+            }
+          }
+          else {
+            if (isPageReplacmentAlgorithmFIFO()) {
+              // TODO: [PROJECT'26.IM#1] FAULT HANDLER II - [1] FIFO Replacement
+              // Your code is here
+              // Comment the following line
+              panic("page_fault_handler().FIFO REPLACEMENT is not implemented yet...!!");
+            } else if (isPageReplacmentAlgorithmLRU(PG_REP_LRU_LISTS_APPROX)) {
+              // TODO: [PROJECT'26.IM#1] FAULT HANDLER II - [3] LRU Replacement
+              // Your code is here
+              // Comment the following line
+              panic("page_fault_handler().LRU REPLACEMENT is not implemented yet...!!");
+            }
+          }
+        }
+
+        void __page_fault_handler_with_buffering(struct Env * curenv, uint32 fault_va) {
+          panic("this function is not required...!!");
+        }
