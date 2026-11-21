@@ -3,4 +3,4 @@
   - Return 0 or panic
 - in order to find the size of the allocated area we needed to create a big array where the index is the page number in the kheap, and the value is the number of pages in that area (0 means this is not the start of any area)
 - in kmalloc should we compare the size to DYN_ALLOC_MAX_BLOCK_SIZE or to DYN_ALLOC_MAX_BLOCK_SIZE - 10 before deciding to use block allocation
-
+- should we spin_lock on freeBlockList? what about freeAreaList?

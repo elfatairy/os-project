@@ -81,6 +81,7 @@ uint16 get_area_size(uint32 va) {
   return area_sizes[page_number];
 }
 void set_area_size(uint32 va, uint16 page_count) {
+  cprintf("setting page %u to size %u\n", va, page_count);
   uint32 page_number = (va - kheapPageAllocStart) / PAGE_SIZE;
   area_sizes[page_number] = page_count;
 }
@@ -157,25 +158,22 @@ void *create_buddy_space() {
 
 void delete_buddy_space(void *buddy_vaaa) {
   //   // TODO: [PROJECT'26.GM#2] KERNEL HEAP - [5] delete_buddy_space
-	if(buddy_vaaa == NULL)
-		return;
+  if (buddy_vaaa == NULL || (uint32)buddy_vaaa < KERNEL_HEAP_START || (uint32)buddy_vaaa >= KERNEL_HEAP_MAX) {
+    return;
+  }
 
-	uint32 *ptr_page_table = NULL;
-	uint32 real_vaaa = ROUNDDOWN ((uint32)buddy_vaaa , PAGE_SIZE);
+  uint32 *ptr_page_table = NULL;
 
-	 if (get_page_table(ptr_page_directory, real_vaaa, &ptr_page_table) ==
-	      TABLE_NOT_EXIST) {
-	        return;
-	  }
-	uint32 pte = ptr_page_table[PTX(real_vaaa)];
-	   if(!is_buddy_space_page(pte))
-		   return;
+  if (get_page_table(ptr_page_directory, (uint32)buddy_vaaa, &ptr_page_table) == TABLE_NOT_EXIST) {
+    return;
+  }
+  uint32 pte = ptr_page_table[PTX((uint32)buddy_vaaa)];
+  if (!is_buddy_space_page(pte)) {
+    return;
+  }
 
-	   else {
-		   unmark_buddy_space_page(real_vaaa);
-		   unmap_frame(ptr_page_directory,real_vaaa);
-	   }
-
+  unmark_buddy_space_page((uint32)buddy_vaaa);
+  unmap_frame(ptr_page_directory, (uint32)buddy_vaaa);
   //   // Comment the following line
   //   // panic("delete_buddy_space() not implemented");
 }
@@ -230,18 +228,17 @@ void *get_free_area(unsigned int size) {
   }
 }
 
-void get_next_prev_free_area(uint32 area_start, uint32 area_size,
-                             struct AreaMetaData **next_area,
-                             struct AreaMetaData **prev_area) {
-
-
+void get_next_prev_free_area(uint32 area_start, uint32 area_size, struct AreaMetaData **next_area, struct AreaMetaData **prev_area) {
+  *prev_area = NULL;
+  *next_area = NULL;
   struct AreaMetaData *el;
   uint32 next_area_start_address = area_start + area_size;
 
   LIST_FOREACH(el, &freeAreaList, AreaMetaData) {
     if (((uint32)el->start_address) == next_area_start_address) {
       *next_area = el;
-    } else if (((uint32)el->start_address + el->size) == area_start) {
+    }
+    if (((uint32)el->start_address + el->size) == area_start) {
       *prev_area = el;
     }
     if (*next_area != NULL && *prev_area != NULL)
@@ -254,6 +251,7 @@ void *kmalloc(unsigned int size) {
   // Your code is here
   // Comment the following line
   // kpanic_into_prompt("kmalloc() is not implemented yet...!!\n");
+  cprintf("allocating size %u\n", size);
   if (size <= DYN_ALLOC_MAX_BLOCK_SIZE) {
     return alloc_block(size);
   }
@@ -278,105 +276,97 @@ void *kmalloc(unsigned int size) {
 }
 
 void kfree(void *virtual_address) {
-   // TODO: [PROJECT'26.GM#2] KERNEL HEAP - [7] kfree
+  // TODO: [PROJECT'26.GM#2] KERNEL HEAP - [7] kfree
 
-  if(virtual_address == NULL)
-	  return;
-  uint32 vaaa = (uint32)virtual_address;
-
-
-  if(vaaa < kheapPageAllocStart || vaaa >= kheapPageAllocBreak){
-  		  panic("invalid address");
-  	 }
-
+  cprintf("freeing at virtual address: %u\n", virtual_address);
+  if (virtual_address == NULL || (uint32)virtual_address < KERNEL_HEAP_START || (uint32)virtual_address >= KERNEL_HEAP_MAX) {
+    panic("invalid address");
+  }
 
   uint32 *ptr_page_table = NULL;
+  if (get_page_table(ptr_page_directory, (uint32)virtual_address, &ptr_page_table) == TABLE_NOT_EXIST) {
+    panic("this address not allocated");
+  }
 
-  	 if (get_page_table(ptr_page_directory, vaaa, &ptr_page_table) ==
-  	      TABLE_NOT_EXIST) {
-  		  panic("this address not allocated");
-  	  }
-  	uint32 pte = ptr_page_table[PTX(vaaa)];
-  	   if(is_buddy_space_page(pte)){
+  uint32 pte = ptr_page_table[PTX((uint32)virtual_address)];
+  if (is_buddy_space_page(pte)) {
+    free_block(virtual_address);
+    return;
+  }
 
-	  free_block(virtual_address);
-
-	  return;
-  	   }
-
-
-  uint32 current_area_NG = ROUNDDOWN(vaaa,PAGE_SIZE);
+  uint32 current_area_NG = ROUNDDOWN((uint32)virtual_address, PAGE_SIZE);
   uint32 num_of_pages = get_area_size(current_area_NG);
-  if(num_of_pages == 0){
-	  panic("this address not allocated");
+  cprintf("area has %u pages\n", num_of_pages);
+  if (num_of_pages == 0) {
+    panic("this address not allocated");
   }
 
   uint32 size_of_area = num_of_pages * PAGE_SIZE;
-  uint32 start_point = current_area_NG;
 
+  uint32 pages_freed = 0;
+  for (uint32 start_point = current_area_NG; start_point < current_area_NG + size_of_area; start_point += PAGE_SIZE) {
+    pages_freed++;
+    unmap_frame(ptr_page_directory, start_point);
+  }
+  cprintf("freed %u pages\n", pages_freed);
 
+  set_area_size(current_area_NG, 0);
 
-   for(uint32 i = 0 ; i <num_of_pages ; i++){
-        unmap_frame(ptr_page_directory,start_point);
-        start_point+= PAGE_SIZE;
-	}
+  struct AreaMetaData *next_area = NULL;
+  struct AreaMetaData *prev_area = NULL;
+  get_next_prev_free_area(current_area_NG, size_of_area, &next_area, &prev_area);
 
-    area_sizes[(current_area_NG-kheapPageAllocStart)/PAGE_SIZE]=0;
-	struct AreaMetaData *next_area = NULL;
-	struct AreaMetaData *prev_area = NULL;
+  uint32 merged_area = current_area_NG;
+  uint32 size_after_merge = size_of_area;
 
-   get_next_prev_free_area(current_area_NG, size_of_area  , &next_area, &prev_area);
+  if (next_area != NULL) {
+    cprintf("found next area\n");
+    size_after_merge += next_area->size;
+    LIST_REMOVE(&freeAreaList, next_area);
+    remove_area_metadata(next_area);
+  }
 
-   uint32 merged_area = current_area_NG;
-   uint32 size_after_merge = size_of_area ;
+  if (prev_area != NULL) {
+    cprintf("found prev area\n");
+    merged_area = (uint32)prev_area->start_address;
+    size_after_merge += prev_area->size;
+    LIST_REMOVE(&freeAreaList, prev_area);
+    remove_area_metadata(prev_area);
+  }
 
-	if(next_area != NULL){
-	  size_after_merge += next_area->size;
-	   LIST_REMOVE(&freeAreaList, next_area);
-	   remove_area_metadata(next_area);
+  if (merged_area + size_after_merge == kheapPageAllocBreak) {
+    kheapPageAllocBreak = merged_area;
+    return;
+  }
 
-	}
-
-	 if(prev_area != NULL){
-		 merged_area = (uint32)prev_area->start_address;
-		 size_after_merge += prev_area->size;
-	 LIST_REMOVE(&freeAreaList, prev_area);
-	 remove_area_metadata(prev_area);
-	}
-
-	 if(merged_area + size_after_merge ==  kheapPageAllocBreak){
-		 kheapPageAllocBreak = merged_area;
-		 return;
-	 }
-
-	 struct AreaMetaData *my_new_merged_area_NG = create_area_metadata((void*)merged_area,size_after_merge);
-	 if(my_new_merged_area_NG == NULL){
-		 panic("there is no enough memory for new area meta data");
-	 }
-    LIST_INSERT_TAIL(&freeAreaList , my_new_merged_area_NG);
+  struct AreaMetaData *my_new_merged_area_NG = create_area_metadata((void *)merged_area, size_after_merge);
+  if (my_new_merged_area_NG == NULL) {
+    panic("there is no enough memory for new area meta data");
+  }
+  LIST_INSERT_TAIL(&freeAreaList, my_new_merged_area_NG);
 
   //   // Comment the following line
   //   // panic("kfree() not implemented");
   //
   //   /*EFFICIENT IMPLEMENTATION ~O(#FREE BLOCKS + #FREED PAGES) IS REQUIRED */
-
 }
 unsigned int kheap_physical_address(unsigned int virtual_address) {
   // TODO: [PROJECT'26.GM#2] KERNEL HEAP - [8] kheap_physical_address
   // Your code is here
   // Comment the following line
   //	panic("kheap_physical_address() is not implemented yet...!!");
-  if (virtual_address >= KERNEL_HEAP_MAX ||
-      virtual_address < KERNEL_HEAP_START) {
+  if (virtual_address >= KERNEL_HEAP_MAX || virtual_address < KERNEL_HEAP_START) {
     return 0;
   }
   uint32 *ptr_page_table;
-  if (get_page_table(ptr_page_directory, virtual_address, &ptr_page_table) ==
-      TABLE_NOT_EXIST) {
+  if (get_page_table(ptr_page_directory, virtual_address, &ptr_page_table) == TABLE_NOT_EXIST) {
     return 0;
   }
-  return EXTRACT_ADDRESS(ptr_page_table[PTX(virtual_address)]) +
-         PGOFF(virtual_address);
+  uint32 page_va = EXTRACT_ADDRESS(ptr_page_table[PTX(virtual_address)]);
+  if (page_va == 0) return 0;
+
+  cprintf("virt %u to phys %u\n", virtual_address, EXTRACT_ADDRESS(ptr_page_table[PTX(virtual_address)]) + PGOFF(virtual_address));
+  return page_va + PGOFF(virtual_address);
   /*EFFICIENT IMPLEMENTATION ~O(1) IS REQUIRED */
 }
 
@@ -385,6 +375,7 @@ unsigned int kheap_virtual_address(unsigned int physical_address) {
   // Your code is here
   // Comment the following line
   //	panic("kheap_virtual_address() is not implemented yet...!!");
+
 
   struct FrameInfo *ptr_frame_info = to_frame_info(physical_address);
 
