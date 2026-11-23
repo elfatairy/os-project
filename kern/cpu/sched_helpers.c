@@ -138,9 +138,9 @@ void sched_insert_ready(struct Env* env)
 
 	assert(env != NULL);
 	{
-		//cprintf("\nInserting %d into ready queue 0\n", env->env_id);
-		env->env_status = ENV_READY ;
+		env->env_status = ENV_READY;
 		enqueue(&(ProcessQueues.env_ready_queues[env->priority]), env);
+		env->added_to_queue_at = read_tsc();
 		env->isExpandedBefore = env->priority;
 	}
 }
@@ -359,7 +359,7 @@ void sched_exit_env(uint32 envId)
 //			cprintf("\n[%d:%s] LAST WS BEFORE EXIT\n", cur_env->env_id,  cur_env->prog_name);
 //			env_page_ws_print(cur_env);
 			//2024: Replaced by sched() which call context switch
-			//fos_scheduler();
+		//fos_scheduler();
 			sched();
 		}
 	}
@@ -685,7 +685,8 @@ void sched_set_starv_thresh(uint32 starvThresh)
 	//TODO: [PROJECT'26.IM#3] CPU SCHEDULING - [1] sched_set_starv_thresh
 	//Your code is here
 	//Comment the following line
-	panic("sched_set_starv_thresh() is not implemented yet...!!");
+	// panic("sched_set_starv_thresh() is not implemented yet...!!");
+	starv_thresh = starvThresh;
 }
 /************************************************************************************/
 

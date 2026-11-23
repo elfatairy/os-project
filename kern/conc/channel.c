@@ -66,6 +66,7 @@ void wakeup_one(struct Channel *myriammmchannn) {
   acquire_kspinlock(&ProcessQueues.qlock);
   struct Env *myriammmmprocessdequeeee = dequeue(&myriammmchannn->queue);
   if (myriammmmprocessdequeeee != NULL) {
+    myriammmmprocessdequeeee->priority = 0;
     sched_insert_ready(myriammmmprocessdequeeee);
   }
   release_kspinlock(&ProcessQueues.qlock);
@@ -87,6 +88,7 @@ void wakeup_all(struct Channel *myriammmchannn) {
   acquire_kspinlock(&ProcessQueues.qlock);
   while (queue_size(&myriammmchannn->queue) > 0) {
     struct Env *myriammmmprocessdequeeee = dequeue(&myriammmchannn->queue);
+    myriammmmprocessdequeeee->priority = 0;
     sched_insert_ready(myriammmmprocessdequeeee);
   }
   release_kspinlock(&ProcessQueues.qlock);
