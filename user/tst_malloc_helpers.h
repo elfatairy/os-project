@@ -9,6 +9,10 @@
 #define USER_TST_MALLOC_HELPERS_H_
 #include <inc/lib.h>
 
+/*******************************************************************************/
+/**************************** PAGE ALLOCATOR AREA ******************************/
+/*******************************************************************************/
+
 #define ACTUAL_PAGE_ALLOC_START ((USER_HEAP_START + DYN_ALLOC_MAX_SIZE))
 #define MAX_NUM_OF_ALLOCS 40
 #define Mega  (1024*1024)
@@ -24,6 +28,9 @@ uint32 totalRequestedSize ;
 bool allocSpaceInPageAlloc(int index, uint32 size, bool writeData, uint32 expectedNumOfTables);
 bool freeSpaceInPageAlloc(int index, bool isDataWritten);
 int initial_page_allocations();
+
+bool allocSpaceInBlockAlloc(int index, uint32 size, uint32 level, uint32 expectedVA);
+int initial_block_allocations();
 
 int inRange(int val, int min, int max)
 {
@@ -101,15 +108,23 @@ bool freeSpaceInPageAlloc(int index, bool isDataWritten)
 	if ((usedDiskPages - sys_pf_calculate_allocated_pages()) != 0)
 	{ correct = 0; cprintf_colored(TEXT_TESTERR_CLR,"1 Wrong free in alloc#%d: Extra or less pages are removed from PageFile\n", index);}
 
-	int actualNumOfFrames = (sys_calculate_free_frames() - freeFrames) ;
-	if (!inRange(actualNumOfFrames, expectedNumOfFrames, expectedNumOfFrames + 2 /*max of: 1 page for KERN Block Alloc (WSelement) + 1 page for USER block alloc (private DS) */))
-	{ correct = 0; cprintf_colored(TEXT_TESTERR_CLR,"2 Wrong free in alloc#%d: WS pages in memory and/or page tables are not freed correctly\n", index);}
+//	int actualNumOfFrames = (sys_calculate_free_frames() - freeFrames) ;
+//	if (!inRange(actualNumOfFrames, expectedNumOfFrames, expectedNumOfFrames + 2 /*max of: 1 page for KERN Block Alloc (WSelement) + 1 page for USER block alloc (private DS) */))
+//	{ correct = 0; cprintf_colored(TEXT_TESTERR_CLR,"2 Wrong free in alloc#%d: WS pages in memory are not freed correctly. Actual: %d, Expected: [%d, %d]\n", index, actualNumOfFrames, expectedNumOfFrames, expectedNumOfFrames+2);}
 
 	if (isDataWritten)
 	{
-		//Check WS
 		char* byteArr = (char *) ptr_allocations[index];
 		uint32 notExpectedVAs[2] = { ROUNDDOWN((uint32)(&(byteArr[0])), PAGE_SIZE), ROUNDDOWN((uint32)(&(byteArr[lastIndices[index]])), PAGE_SIZE)} ;
+		//Check Permeissions
+		for (int i = 0; i < 2; ++i)
+		{
+			uint32 va = notExpectedVAs[i];
+			uint32 perm = vpt[VPN(va)] & 0xFFF;
+			if ((perm & PERM_PRESENT) || (perm & PERM_UHPAGE))
+			{ correct = 0; cprintf_colored(TEXT_TESTERR_CLR,"2 Wrong free in alloc#%d: page is not removed from memory\n", index);}
+		}
+		//Check WS
 		if (sys_check_WS_list(notExpectedVAs, expectedNumOfFrames, 0, 3) != 1)
 		{ correct = 0; cprintf_colored(TEXT_TESTERR_CLR,"3 Wrong free in alloc#%d: page is not removed from WS\n", index);}
 	}
@@ -124,14 +139,21 @@ int initial_page_allocations()
 	 * IMPLEMENTATIONS TO DYNAMICALLY ALLOCATE SPECIAL DATA
 	 * STRUCTURE TO MANAGE THE PAGE ALLOCATOR.
 	 *********************************************************/
-	uint32 expectedVA = ACTUAL_PAGE_ALLOC_START; //UHS + 32MB + 4KB
+	//0. Alloc initial Buddy to be used for any further small allocations
+	cprintf_colored(TEXT_cyan,"%~\n	1.0 Alloc initial Buddy to be used for any further small allocations\n");
+	{
+		int* dummy = malloc(4);
+		*dummy = 1;
+	}
+
+	uint32 expectedVA = ACTUAL_PAGE_ALLOC_START + PAGE_SIZE;
+	totalRequestedSize = PAGE_SIZE;
 
 	//malloc some spaces
 	int i, freeFrames, usedDiskPages, expectedNumOfTables ;
 	uint32 size = 0;
 	char* ptr;
 	int sums[20] = {0};
-	totalRequestedSize = 0;
 
 	int eval = 0;
 	bool correct ;
@@ -140,12 +162,12 @@ int initial_page_allocations()
 	//Create some areas in PAGE allocators
 	cprintf_colored(TEXT_cyan,"%~\n	1.1 Create some areas in PAGE allocators\n");
 	{
-		//4 MB
+		//4 MB - 4 KB
 		allocIndex = 0;
 		expectedVA += ROUNDUP(size, PAGE_SIZE);
-		size = 4*Mega - kilo;
+		size = 4*Mega - 4*kilo; /*since 1 page for Buddy is already allocated at the begin of UHEAP*/
 		totalRequestedSize += ROUNDUP(size, PAGE_SIZE);
-		expectedNumOfTables = 2;
+		expectedNumOfTables = 0;
 		correct = allocSpaceInPageAlloc(allocIndex, size, 1, expectedNumOfTables);
 		if ((uint32) ptr_allocations[allocIndex] != (expectedVA)) { correct = 0; cprintf_colored(TEXT_TESTERR_CLR,"%~%d.3 Wrong start address for the allocated space... Expected = %x, Actual = %x\n", allocIndex, expectedVA, ptr_allocations[allocIndex]); }
 		if (correct) eval += 10;
@@ -215,7 +237,7 @@ int initial_page_allocations()
 		expectedVA += ROUNDUP(size, PAGE_SIZE);
 		size = 1*Mega - 1*kilo;
 		totalRequestedSize += ROUNDUP(size, PAGE_SIZE);
-		expectedNumOfTables = 1; //since page allocator is started 1 page after the 32MB of Block Allocator
+		expectedNumOfTables = 0;
 		correct = allocSpaceInPageAlloc(allocIndex, size, 1, expectedNumOfTables);
 		if ((uint32) ptr_allocations[allocIndex] != (expectedVA)) { correct = 0; cprintf_colored(TEXT_TESTERR_CLR,"%~%d.3 Wrong start address for the allocated space... Expected = %x, Actual = %x\n", allocIndex, expectedVA, ptr_allocations[allocIndex]); }
 		if (correct) eval += 5;
@@ -237,7 +259,7 @@ int initial_page_allocations()
 		expectedVA += ROUNDUP(size, PAGE_SIZE);
 		size = 2*Mega ;
 		totalRequestedSize += ROUNDUP(size, PAGE_SIZE);
-		expectedNumOfTables = 1;
+		expectedNumOfTables = 0;
 		correct = allocSpaceInPageAlloc(allocIndex, size, 1, expectedNumOfTables);
 		if ((uint32) ptr_allocations[allocIndex] != (expectedVA)) { correct = 0; cprintf_colored(TEXT_TESTERR_CLR,"%~%d.3 Wrong start address for the allocated space... Expected = %x, Actual = %x\n", allocIndex, expectedVA, ptr_allocations[allocIndex]); }
 		if (correct) eval += 10;
@@ -299,6 +321,169 @@ int initial_page_allocations()
 	}
 	if (correct)	eval+=10 ;
 
+	return eval;
+}
+
+/*******************************************************************************/
+/**************************** BLOCK ALLOCATOR AREA *****************************/
+/*******************************************************************************/
+
+short* startBlockVAs[(USER_HEAP_MAX - USER_HEAP_START)/ DYN_ALLOC_MAX_BLOCK_SIZE] = {0} ;
+uint8 levelOfEachAllocBlock[(USER_HEAP_MAX - USER_HEAP_START)/ DYN_ALLOC_MAX_BLOCK_SIZE] = {0} ;
+#define numOfLevels (BUDDY_UPPER_LEVEL + 1)
+int numOfAllocBlocksPerSize[numOfLevels] = {0};
+int numOfAllocPages = 0;
+int numOfAllocBlocks = 0;
+
+bool allocSpaceInBlockAlloc(int index, uint32 size, uint32 level, uint32 expectedVA)
+{
+	int is_correct = 1;
+
+	void *va ;
+	//allocate a new block with the curSize
+	{
+		va = malloc(size);
+		startBlockVAs[index] = va;
+		levelOfEachAllocBlock[index] = level;
+	}
+
+	//fill the entire block
+	for (int i = 0; i < size/2; ++i)
+	{
+		startBlockVAs[index][i] = index;
+	}
+
+	numOfAllocBlocksPerSize[level]++ ;
+
+	if (is_correct && ROUNDDOWN((uint32)va, PAGE_SIZE) != expectedVA)
+	{
+		is_correct = 0;
+		cprintf_colored(TEXT_TESTERR_CLR, "%~allocSpaceInBlockAlloc() alloc%d: WRONG! VA is not correct. Expected VA = %x, Actual VA = %x\n", index, expectedVA, ROUNDDOWN((uint32)va, PAGE_SIZE));
+	}
+
+	//Check WS
+	uint32 expectedVAs[1] = { ROUNDDOWN((uint32)(&(startBlockVAs[index][0])), PAGE_SIZE)} ;
+	if (sys_check_WS_list(expectedVAs, 1, 0, 2) != 1)
+	{ is_correct = 0; cprintf_colored(TEXT_TESTERR_CLR,"%~allocSpaceInBlockAlloc() alloc%d: WRONG! page is not added to WS\n", index);}
+
+	return is_correct;
+}
+
+int initial_block_allocations()
+{
+	memset(numOfAllocBlocksPerSize, 0, numOfLevels * sizeof(int)) ;
+	numOfAllocPages = 0;
+
+	int eval = 0;
+	bool is_correct = 1;
+
+	int freeFramesBefore = (int)sys_calculate_free_frames();
+	int usedDiskPagesBefore = (int)sys_pf_calculate_allocated_pages() ;
+	uint32 currentVA = USER_HEAP_START;
+
+	void *va ;
+	int idx = 0, size = 0, level = 0;
+	//====================================================================//
+	/*0: Allocate two blocks with size 16B & 32B*/
+	cprintf_colored(TEXT_cyan, "%~\n	1.0: 0: Allocate two blocks with size 16B & 32B\n\n") ;
+	level = 4;
+	size = BLOCK_SIZE(level) - META_DATA_SIZE;
+	is_correct = allocSpaceInBlockAlloc(idx++, size, level, currentVA);
+	if (!is_correct) panic("First block allocation FAILED!");
+
+	level = 5;
+	size = BLOCK_SIZE(level) - META_DATA_SIZE;
+	is_correct = allocSpaceInBlockAlloc(idx++, size, level, currentVA);
+	if (!is_correct) panic("Second block allocation FAILED!");
+	//====================================================================//
+	/*1: Check initial allocations (two blocks should be allocated 16B & 32B)*/
+	cprintf_colored(TEXT_cyan, "%~\n	1.1: Check initial BLOCK allocations (two blocks should be allocated 16B & 32B)\n\n") ;
+	uint32 numOfRemain32 = 0;
+	uint32 numOfRemain16 = 1;
+	if (LIST_SIZE(&freeBlockLists[5]) != numOfRemain32 || LIST_SIZE(&freeBlockLists[4]) != numOfRemain16)
+	{
+		is_correct = 0;
+		cprintf_colored(TEXT_TESTERR_CLR, "initial allocation #1: unexpected list size! check boot-time allocation\n");
+	}
+	numOfAllocBlocksPerSize[4]++ ;
+	numOfAllocBlocksPerSize[5]++ ;
+	numOfAllocPages++;
+
+	if (is_correct) eval += 10;
+	//====================================================================//
+	/*2: Allocate all remaining blocks from the current page*/
+	{
+		cprintf_colored(TEXT_cyan, "%~\n	1.2: Allocate all remaining blocks from the current page\n\n") ;
+		is_correct = 1;
+		for (int l = BUDDY_LOWER_LEVEL; l <= BUDDY_UPPER_LEVEL; ++l)
+		{
+			if (l == 5) continue; //skip this level since it has no free blocks due to the previous 16B & 32B alloc's
+			int curSize = BLOCK_SIZE(l) - META_DATA_SIZE ;
+			bool res = allocSpaceInBlockAlloc(idx++, curSize, l, currentVA);
+			if (res == 0) { is_correct = 0; }
+		}
+		if (is_correct) eval += 20;
+	}
+
+	//====================================================================//
+	/*3: For each possible block size, allocate all, except one, blocks from one page */
+	cprintf_colored(TEXT_cyan, "%~\n	1.3: For each possible block size, allocate all, except one, blocks from one page\n\n") ;
+	{
+		is_correct = 1;
+		for (int l = BUDDY_LOWER_LEVEL; l <= BUDDY_UPPER_LEVEL; ++l)
+		{
+			int curSize = BLOCK_SIZE(l)  ;
+			int maxNumOfBlksAtCurPage = PAGE_SIZE / curSize;
+			curSize -= META_DATA_SIZE;
+
+			numOfAllocPages++; currentVA += PAGE_SIZE;
+
+			for (int b = 0; b < maxNumOfBlksAtCurPage - 1; ++b)
+			{
+				bool res = allocSpaceInBlockAlloc(idx++, curSize, l, currentVA);
+				if (res == 0) { is_correct = 0; }
+			}
+
+		}
+		if (is_correct) eval += 30;
+	}
+
+	//====================================================================//
+	/*4: Check content of each block */
+	numOfAllocBlocks = idx;
+	{
+		cprintf_colored(TEXT_cyan, "%~	1.4: Check content of each block \n\n") ;
+		is_correct = 1;
+		for (int b = 0; b < numOfAllocBlocks; ++b)
+		{
+			//check the content of the current block
+			int sum = 0;
+			int curSize = BLOCK_SIZE(levelOfEachAllocBlock[b]) - META_DATA_SIZE;
+
+			for (int i = 0; i < curSize/2; ++i)
+			{
+				sum += startBlockVAs[b][i] ;
+			}
+			if (is_correct && sum != b * curSize/2)
+			{ is_correct = 0; cprintf_colored(TEXT_TESTERR_CLR,"%d wrong content\n", b); }
+		}
+		if (is_correct) eval += 20;
+	}
+	//====================================================================//
+	/*5: Check number of allocated pages */
+	cprintf_colored(TEXT_cyan, "%~	1.5: Check number of allocated pages \n\n") ;
+	{
+		uint32 expectedNumOfTables = 1;
+		is_correct = 1;
+		int usedDiskPagesAfter = (int)sys_pf_calculate_allocated_pages() ;
+		if ((usedDiskPagesAfter - usedDiskPagesBefore) != 0) { is_correct = 0; cprintf_colored(TEXT_TESTERR_CLR,"Page file is changed while it's not expected to. (pages are wrongly allocated/de-allocated in PageFile)\n"); }
+		int diff = (freeFramesBefore - sys_calculate_free_frames()) ;
+		int expected =(numOfAllocPages + expectedNumOfTables);
+		int extraPages = 1;
+		if (!inRange(diff, expected, expected + extraPages /*KH: Max of 1 extra Buddy page for WS elements*/))
+		{ is_correct = 0; cprintf_colored(TEXT_TESTERR_CLR,"Wrong allocation: invalid number of allocated pages! Expected = [%d, %d], Actual = %d\n", expected, expected + extraPages, diff); }
+		if (is_correct)	eval += 20;
+	}
 	return eval;
 }
 

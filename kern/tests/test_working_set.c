@@ -22,8 +22,8 @@ int sys_check_LRU_lists(uint32* active_list_content, uint32* second_list_content
 	{
 		struct Env* cur_env = get_cpu_proc();
 		assert(cur_env != NULL);
-		cprintf("CURRENT WS CONTENT BEFORE CHECKING:\n");
-		env_page_ws_print(cur_env);
+		//cprintf("CURRENT WS CONTENT BEFORE CHECKING:\n");
+		//env_page_ws_print(cur_env);
 
 		struct Env* env = cur_env;
 		struct WorkingSetElement* ptr_WS_element;

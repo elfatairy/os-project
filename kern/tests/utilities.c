@@ -155,7 +155,7 @@ int __numOfSlaves = 0;
 #define __maxNumOfKSems (100)
 struct ksemaphore __ksems[NENV][__maxNumOfKSems];
 extern char __isKernPanic__ ;
-
+bool __stopOtherProc__ = 0;
 void sys_utilities(char* utilityName, int value)
 {
 	//Disable interrupts and pause clock
@@ -469,10 +469,10 @@ void sys_utilities(char* utilityName, int value)
 		bool* correct = (bool*) value ;
 		*correct = 1;
 		int number_of_tokens;
-		char *tokens[MAX_REF_CNT];
+		char *tokens[MAX_ARGUMENTS];
 		strsplit(utilityName, "@", tokens, &number_of_tokens) ;
 		int numOfRefs = strtol(tokens[1], NULL, 10);
-		assert(numOfRefs < MAX_REF_CNT);
+		assert(numOfRefs <= MAX_ARGUMENTS);
 		struct Env* env = get_cpu_proc() ;
 		if (numOfRefs != LIST_SIZE(&(env->referenceStreamList)))
 		{
@@ -511,7 +511,7 @@ void sys_utilities(char* utilityName, int value)
 		uint32* numOfSlaves = (uint32*) value ;
 
 		int number_of_tokens;
-		char *tokens[MAX_REF_CNT];
+		char *tokens[MAX_ARGUMENTS];
 		strsplit(utilityName, "@", tokens, &number_of_tokens) ;
 		if (strcmp(tokens[1], "Set") == 0)
 		{
@@ -526,7 +526,7 @@ void sys_utilities(char* utilityName, int value)
 	{
 //		cprintf("utilityName = %s\n", utilityName);
 		int number_of_tokens;
-		char *tokens[MAX_REF_CNT];
+		char *tokens[MAX_ARGUMENTS];
 		strsplit(utilityName, "@", tokens, &number_of_tokens) ;
 		int envIdx = 0;
 		int semNum = strtol(tokens[1], NULL, 10);
@@ -564,7 +564,7 @@ void sys_utilities(char* utilityName, int value)
 	{
 		uint32* va = (uint32*) value ;
 		int number_of_tokens;
-		char *tokens[MAX_REF_CNT];
+		char *tokens[MAX_ARGUMENTS];
 		strsplit(utilityName, "@", tokens, &number_of_tokens) ;
 		uint32 size = strtol(tokens[1], NULL, 10);
 		*va = (uint32)kmalloc(size);
@@ -579,7 +579,7 @@ void sys_utilities(char* utilityName, int value)
 		bool* check = (bool*) value ;
 		*check = 0;
 		int number_of_tokens;
-		char *tokens[MAX_REF_CNT];
+		char *tokens[MAX_ARGUMENTS];
 		strsplit(utilityName, "@", tokens, &number_of_tokens) ;
 		uint8* va = (uint8*)strtol(tokens[1], NULL, 10);
 		for (int i = 0; i < 256; ++i)
@@ -627,7 +627,7 @@ void sys_utilities(char* utilityName, int value)
 	{
 		bool* check = (bool*) value ;
 		int number_of_tokens;
-		char *tokens[MAX_REF_CNT];
+		char *tokens[MAX_ARGUMENTS];
 		strsplit(utilityName, "@", tokens, &number_of_tokens) ;
 		uint32 envID = strtol(tokens[1], NULL, 10);
 		struct Env* e;
@@ -644,19 +644,32 @@ void sys_utilities(char* utilityName, int value)
 	}
 	else if (strcmp(utilityName, "__ExitAllReadyEnvs__") == 0)
 	{
-		sched_exit_all_ready_envs();
+		cpuclk_pause(); pushcli();
+		{
+			cprintf_colored(TEXT_yellow, "NOW... will exit ALL ready envs...\n");
+			sched_exit_all_ready_envs();
+			cprintf_colored(TEXT_yellow, "ALL ready envs are exited\n");
+		}
+		popcli(); cpuclk_resume();
+	}
+	else if (strcmp(utilityName, "__IsProcStopped__") == 0)
+	{
+		uint32* stopProc = (uint32*) value ;
+		*stopProc = __stopOtherProc__ ;
+	}
+	else if (strcmp(utilityName, "__StopOtherProcesses__") == 0)
+	{
+		__stopOtherProc__ = 1;
 	}
 	else if (strncmp(utilityName, "__CheckMBConnections@", strlen("__CheckMBConnections@")) == 0)
 	{
-#define MAX_ENV_CNT 40
 		bool* correct = (bool*) value ;
 		*correct = 1;
 		int number_of_tokens;
-		char *tokens[MAX_ENV_CNT];
+		char *tokens[MAX_ARGUMENTS];
 		strsplit(utilityName, "@", tokens, &number_of_tokens) ;
 		int numOfSenders = strtol(tokens[1], NULL, 10);
 		int numOfReceivers = strtol(tokens[2], NULL, 10);
-		assert(numOfSenders + numOfReceivers < MAX_ENV_CNT);
 		struct Env* env = get_cpu_proc() ;
 
 		uint32 *expectedSenders = (uint32 *)strtol(tokens[3], NULL, 10);
@@ -675,7 +688,7 @@ void sys_utilities(char* utilityName, int value)
 		}
 		if (!found)
 		{
-			cprintf("Mailbox %s not found in the list", MBName);
+			cprintf_colored(TEXT_TESTERR_CLR, "Mailbox %s not found in the list\n", MBName);
 			*correct = 0;
 			return;
 		}
@@ -694,7 +707,7 @@ void sys_utilities(char* utilityName, int value)
 			}
 			if (!found)
 			{
-				cprintf("Sender Env#%d NOT Found in MB %s!", expectedSenders[i], MBName);
+				cprintf_colored(TEXT_TESTERR_CLR, "Sender Env#%d NOT Found in MB %s!\n", expectedSenders[i], MBName);
 				*correct = 0;
 				return;
 			}
@@ -713,11 +726,87 @@ void sys_utilities(char* utilityName, int value)
 			}
 			if (!found)
 			{
-				cprintf("Receiver Env#%d NOT Found in MB %s!", expectedReceivers[i], MBName);
+				cprintf_colored(TEXT_TESTERR_CLR, "Receiver Env#%d NOT Found in MB %s!\n", expectedReceivers[i], MBName);
 				*correct = 0;
 				return;
 			}
 		}
+	}
+	else if (strncmp(utilityName, "__CheckLocalMBMsgs@", strlen("__CheckLocalMBMsgs@")) == 0)
+	{
+		bool* correct = (bool*) value ;
+		*correct = 1;
+		int number_of_tokens;
+		char *tokens[MAX_ARGUMENTS];
+		strsplit(utilityName, "@", tokens, &number_of_tokens) ;
+		int numOfMsgs = strtol(tokens[1], NULL, 10);
+		assert(numOfMsgs <= MB_MAX_MESSAGES);
+		int expectedCopyPerMsg = strtol(tokens[2], NULL, 10);
+		int expectedMsgType = strtol(tokens[3], NULL, 10);
+		int receiverID = strtol(tokens[number_of_tokens - 1], NULL, 10);
+		struct Env* env = NULL;
+		envid2env(receiverID, &env, 0);
+		assert(env != NULL);
+		struct Mailbox *localMailbox = env->myMailBox;
+		//cprintf("number_of_tokens = %d, numOfMsgs = %d, expectedCopyPerMsg = %d, receiverID = %d\n",number_of_tokens, numOfMsgs, expectedCopyPerMsg, receiverID);
+		char *expectedMsg ;
+		if (expectedMsgType == MSG_DATA)
+		{
+			for (int m = 0; m < numOfMsgs; ++m)
+			{
+				bool found = 0;
+				expectedMsg = tokens[4 + m];
+				struct Message *msg ;
+				LIST_FOREACH(msg,&(localMailbox->messages), Message)
+				{
+					if (msg->type == MSG_DATA && strncmp((char*)msg->data, expectedMsg, strlen(expectedMsg)) == 0)
+					{
+						found++;
+					}
+				}
+				if (found != expectedCopyPerMsg)
+				{
+					cprintf_colored(TEXT_TESTERR_CLR, "%d copies of message %s not found in local mailbox of env %d\n", expectedCopyPerMsg, expectedMsg, env->env_id);
+					*correct = 0;
+					break;
+				}
+			}
+		}
+		else if (expectedMsgType == MSG_NULL)
+		{
+			bool found = 0;
+			struct Message *msg ;
+			LIST_FOREACH(msg,&(localMailbox->messages), Message)
+			{
+				if (msg->type == MSG_NULL)
+				{
+					found++;
+				}
+			}
+			if (found != numOfMsgs * expectedCopyPerMsg)
+			{
+				cprintf_colored(TEXT_TESTERR_CLR, "%d copies of NULL message not found in local mailbox of env %d\n", numOfMsgs * expectedCopyPerMsg, env->env_id);
+				*correct = 0;
+			}
+		}
+		else
+		{
+			panic("Unexpected msg type!!");
+		}
+		return;
+	}
+
+	else if (strncmp(utilityName, "__GetMailbox@", strlen("__GetMailbox@")) == 0)
+	{
+		bool* correct = (bool*) value ;
+		int number_of_tokens;
+		char *tokens[MAX_ARGUMENTS];
+		strsplit(utilityName, "@", tokens, &number_of_tokens) ;
+		int handle = strtol(tokens[1], NULL, 10);
+		assert(handle >= 0);
+		int connectionType = strtol(tokens[2], NULL, 10);
+		struct Mailbox *mb;
+		*correct = ipc_get_mailbox(handle, &mb, connectionType);
 	}
 	if ((int)value < 0)
 	{

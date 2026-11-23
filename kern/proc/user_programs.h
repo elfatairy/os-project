@@ -128,6 +128,13 @@ DECLARE_START_OF(sc_CPU_MLFQ_Master_1);
 DECLARE_START_OF(sc_CPU_MLFQ_slave_1_1);
 DECLARE_START_OF(sc_CPU_MLFQ_slave_1_2);
 /********************************************/
+DECLARE_START_OF(fib_small);
+DECLARE_START_OF(fib_medium);
+DECLARE_START_OF(fib_large);
+DECLARE_START_OF(tst_mlfq_1);
+DECLARE_START_OF(tst_mlfq_2);
+DECLARE_START_OF(tst_mlfq_2_slave);
+/********************************************/
 
 /**************/
 /*CONCURRENCY */
@@ -147,6 +154,31 @@ DECLARE_START_OF(tst_sleeplock_slave);
 DECLARE_START_OF(tst_protection);
 DECLARE_START_OF(tst_protection_slave1);
 /********************************************/
+
+/*******/
+/*IPC */
+/*******/
+DECLARE_START_OF(ipc1_sender1);
+DECLARE_START_OF(ipc1_receiver1);
+DECLARE_START_OF(ipc1_0);
+DECLARE_START_OF(ipc1_1);
+DECLARE_START_OF(ipc1_2);
+DECLARE_START_OF(ipc1_3);
+DECLARE_START_OF(ipc1_4);
+DECLARE_START_OF(ipc1_5);
+DECLARE_START_OF(ipc2_sender0);
+DECLARE_START_OF(ipc2_sender1);
+DECLARE_START_OF(ipc2_receiver1);
+DECLARE_START_OF(ipc2_sender2);
+DECLARE_START_OF(ipc2_receiver2);
+DECLARE_START_OF(ipc2_receiver3);
+DECLARE_START_OF(ipc2_0_slave);
+DECLARE_START_OF(ipc2_validations);
+DECLARE_START_OF(ipc2_0);
+DECLARE_START_OF(ipc2_1);
+DECLARE_START_OF(ipc2_2);
+DECLARE_START_OF(ipc2_3);
+DECLARE_START_OF(ipc2_4);
 
 /******************/
 /*EXIT (env_free) */
