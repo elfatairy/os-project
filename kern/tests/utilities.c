@@ -18,6 +18,7 @@
 #include <kern/mem/memory_manager.h>
 #include <kern/mem/kheap.h>
 #include "../cons/console.h"
+#include <kern/ipc/ipc.h>
 
 #include <kern/trap/fault_handler.h>
 
@@ -111,6 +112,40 @@ __inline__ uint8 __get_block_index__(uint32 size)
 }
 
 
+void update_env_info(bool uce)
+{
+	bool is_held = holding_kspinlock(&ProcessQueues.qlock);
+	if (!is_held)
+	{
+		acquire_kspinlock(&ProcessQueues.qlock);
+	}
+	{
+		for (int i = 0; i < num_of_ready_queues; ++i)
+		{
+			struct Env *e ;
+			LIST_FOREACH(e, &(ProcessQueues.env_ready_queues[i]), Env)
+			{
+				e->isExpandedBefore = i;
+			}
+		}
+		if (uce && isSchedMethodMLFQ())
+		{
+			struct Env *cur_env = get_cpu_proc();
+			if (cur_env)
+			{
+				if (cur_env->isExpandedBefore < num_of_ready_queues - 1)
+					cur_env->isExpandedBefore++;
+			}
+		}
+	}
+	if (!is_held)
+	{
+		release_kspinlock(&ProcessQueues.qlock);
+	}
+}
+
+
+
 int __firstTimeSleep = 1;
 struct Channel __tstchan__ ;
 struct kspinlock __tstchan_lk__;
@@ -120,7 +155,7 @@ int __numOfSlaves = 0;
 #define __maxNumOfKSems (100)
 struct ksemaphore __ksems[NENV][__maxNumOfKSems];
 extern char __isKernPanic__ ;
-
+bool __stopOtherProc__ = 0;
 void sys_utilities(char* utilityName, int value)
 {
 	//Disable interrupts and pause clock
@@ -383,7 +418,7 @@ void sys_utilities(char* utilityName, int value)
 			//cprintf("\n\n<<<<<<<<<<< BAD ENV >>>>>>>>>>>\n\n");
 			*procState = E_BAD_ENV;
 			//Enable interrupts and resume clock
-			popcli(); cpuclk_resume();
+			//popcli(); cpuclk_resume();
 			return;
 		}
 		else
@@ -434,17 +469,17 @@ void sys_utilities(char* utilityName, int value)
 		bool* correct = (bool*) value ;
 		*correct = 1;
 		int number_of_tokens;
-		char *tokens[MAX_REF_CNT];
+		char *tokens[MAX_ARGUMENTS];
 		strsplit(utilityName, "@", tokens, &number_of_tokens) ;
 		int numOfRefs = strtol(tokens[1], NULL, 10);
-		assert(numOfRefs < MAX_REF_CNT);
+		assert(numOfRefs <= MAX_ARGUMENTS);
 		struct Env* env = get_cpu_proc() ;
 		if (numOfRefs != LIST_SIZE(&(env->referenceStreamList)))
 		{
 			cprintf("num of references MISMATCHED! Expected = %d, Actual = %d\n", numOfRefs, LIST_SIZE(&(env->referenceStreamList)));
 			*correct = 0;
 			//Enable interrupts and resume clock
-			popcli(); cpuclk_resume();
+			//popcli(); cpuclk_resume();
 			return;
 		}
 
@@ -459,7 +494,7 @@ void sys_utilities(char* utilityName, int value)
 				cprintf("Ref#%d MISMATCHED! Expected = %d, Actual = %d\n", ROUNDDOWN(expectedRefStream[i], PAGE_SIZE), ROUNDDOWN(curRef->virtual_address, PAGE_SIZE));
 				*correct = 0;
 				//Enable interrupts and resume clock
-				popcli(); cpuclk_resume();
+				//popcli(); cpuclk_resume();
 				return;
 			}
 			curRef = LIST_NEXT(curRef);
@@ -476,7 +511,7 @@ void sys_utilities(char* utilityName, int value)
 		uint32* numOfSlaves = (uint32*) value ;
 
 		int number_of_tokens;
-		char *tokens[MAX_REF_CNT];
+		char *tokens[MAX_ARGUMENTS];
 		strsplit(utilityName, "@", tokens, &number_of_tokens) ;
 		if (strcmp(tokens[1], "Set") == 0)
 		{
@@ -491,7 +526,7 @@ void sys_utilities(char* utilityName, int value)
 	{
 //		cprintf("utilityName = %s\n", utilityName);
 		int number_of_tokens;
-		char *tokens[MAX_REF_CNT];
+		char *tokens[MAX_ARGUMENTS];
 		strsplit(utilityName, "@", tokens, &number_of_tokens) ;
 		int envIdx = 0;
 		int semNum = strtol(tokens[1], NULL, 10);
@@ -529,7 +564,7 @@ void sys_utilities(char* utilityName, int value)
 	{
 		uint32* va = (uint32*) value ;
 		int number_of_tokens;
-		char *tokens[MAX_REF_CNT];
+		char *tokens[MAX_ARGUMENTS];
 		strsplit(utilityName, "@", tokens, &number_of_tokens) ;
 		uint32 size = strtol(tokens[1], NULL, 10);
 		*va = (uint32)kmalloc(size);
@@ -544,7 +579,7 @@ void sys_utilities(char* utilityName, int value)
 		bool* check = (bool*) value ;
 		*check = 0;
 		int number_of_tokens;
-		char *tokens[MAX_REF_CNT];
+		char *tokens[MAX_ARGUMENTS];
 		strsplit(utilityName, "@", tokens, &number_of_tokens) ;
 		uint8* va = (uint8*)strtol(tokens[1], NULL, 10);
 		for (int i = 0; i < 256; ++i)
@@ -557,7 +592,7 @@ void sys_utilities(char* utilityName, int value)
 			{
 				*check = 0;
 				//Enable interrupts and resume clock
-				popcli(); cpuclk_resume();
+				//popcli(); cpuclk_resume();
 				return;
 			}
 		}
@@ -592,7 +627,7 @@ void sys_utilities(char* utilityName, int value)
 	{
 		bool* check = (bool*) value ;
 		int number_of_tokens;
-		char *tokens[MAX_REF_CNT];
+		char *tokens[MAX_ARGUMENTS];
 		strsplit(utilityName, "@", tokens, &number_of_tokens) ;
 		uint32 envID = strtol(tokens[1], NULL, 10);
 		struct Env* e;
@@ -607,7 +642,172 @@ void sys_utilities(char* utilityName, int value)
 		uint32* isKernPanic = (uint32*) value ;
 		*isKernPanic = __isKernPanic__ ;
 	}
+	else if (strcmp(utilityName, "__ExitAllReadyEnvs__") == 0)
+	{
+		cpuclk_pause(); pushcli();
+		{
+			cprintf_colored(TEXT_yellow, "NOW... will exit ALL ready envs...\n");
+			sched_exit_all_ready_envs();
+			cprintf_colored(TEXT_yellow, "ALL ready envs are exited\n");
+		}
+		popcli(); cpuclk_resume();
+	}
+	else if (strcmp(utilityName, "__IsProcStopped__") == 0)
+	{
+		uint32* stopProc = (uint32*) value ;
+		*stopProc = __stopOtherProc__ ;
+	}
+	else if (strcmp(utilityName, "__StopOtherProcesses__") == 0)
+	{
+		__stopOtherProc__ = 1;
+	}
+	else if (strncmp(utilityName, "__CheckMBConnections@", strlen("__CheckMBConnections@")) == 0)
+	{
+		bool* correct = (bool*) value ;
+		*correct = 1;
+		int number_of_tokens;
+		char *tokens[MAX_ARGUMENTS];
+		strsplit(utilityName, "@", tokens, &number_of_tokens) ;
+		int numOfSenders = strtol(tokens[1], NULL, 10);
+		int numOfReceivers = strtol(tokens[2], NULL, 10);
+		struct Env* env = get_cpu_proc() ;
 
+		uint32 *expectedSenders = (uint32 *)strtol(tokens[3], NULL, 10);
+		uint32 *expectedReceivers = (uint32 *)strtol(tokens[4], NULL, 10);
+		char* MBName = tokens[5];
+
+		struct Mailbox *mb ;
+		int found = 0;
+		LIST_FOREACH(mb, &mailbox_list, Mailbox)
+		{
+			if (strcmp(mb->name, MBName) == 0)
+			{
+				found = 1;
+				break;
+			}
+		}
+		if (!found)
+		{
+			cprintf_colored(TEXT_TESTERR_CLR, "Mailbox %s not found in the list\n", MBName);
+			*correct = 0;
+			return;
+		}
+
+		//Check the expected senders inside the mb
+		for (int i = 0; i < numOfSenders; ++i)
+		{
+			found = 0;
+			for (int j = 0; j < MB_MAX_SENDERS; ++j)
+			{
+				if (expectedSenders[i] == mb->senders[j])
+				{
+					found = 1;
+					break;
+				}
+			}
+			if (!found)
+			{
+				cprintf_colored(TEXT_TESTERR_CLR, "Sender Env#%d NOT Found in MB %s!\n", expectedSenders[i], MBName);
+				*correct = 0;
+				return;
+			}
+		}
+		//Check the expected receivers inside the mb
+		for (int i = 0; i < numOfReceivers; ++i)
+		{
+			found = 0;
+			for (int j = 0; j < MB_MAX_RECEIVERS; ++j)
+			{
+				if (expectedReceivers[i] == mb->receivers[j])
+				{
+					found = 1;
+					break;
+				}
+			}
+			if (!found)
+			{
+				cprintf_colored(TEXT_TESTERR_CLR, "Receiver Env#%d NOT Found in MB %s!\n", expectedReceivers[i], MBName);
+				*correct = 0;
+				return;
+			}
+		}
+	}
+	else if (strncmp(utilityName, "__CheckLocalMBMsgs@", strlen("__CheckLocalMBMsgs@")) == 0)
+	{
+		bool* correct = (bool*) value ;
+		*correct = 1;
+		int number_of_tokens;
+		char *tokens[MAX_ARGUMENTS];
+		strsplit(utilityName, "@", tokens, &number_of_tokens) ;
+		int numOfMsgs = strtol(tokens[1], NULL, 10);
+		assert(numOfMsgs <= MB_MAX_MESSAGES);
+		int expectedCopyPerMsg = strtol(tokens[2], NULL, 10);
+		int expectedMsgType = strtol(tokens[3], NULL, 10);
+		int receiverID = strtol(tokens[number_of_tokens - 1], NULL, 10);
+		struct Env* env = NULL;
+		envid2env(receiverID, &env, 0);
+		assert(env != NULL);
+		struct Mailbox *localMailbox = env->myMailBox;
+		//cprintf("number_of_tokens = %d, numOfMsgs = %d, expectedCopyPerMsg = %d, receiverID = %d\n",number_of_tokens, numOfMsgs, expectedCopyPerMsg, receiverID);
+		char *expectedMsg ;
+		if (expectedMsgType == MSG_DATA)
+		{
+			for (int m = 0; m < numOfMsgs; ++m)
+			{
+				bool found = 0;
+				expectedMsg = tokens[4 + m];
+				struct Message *msg ;
+				LIST_FOREACH(msg,&(localMailbox->messages), Message)
+				{
+					if (msg->type == MSG_DATA && strncmp((char*)msg->data, expectedMsg, strlen(expectedMsg)) == 0)
+					{
+						found++;
+					}
+				}
+				if (found != expectedCopyPerMsg)
+				{
+					cprintf_colored(TEXT_TESTERR_CLR, "%d copies of message %s not found in local mailbox of env %d\n", expectedCopyPerMsg, expectedMsg, env->env_id);
+					*correct = 0;
+					break;
+				}
+			}
+		}
+		else if (expectedMsgType == MSG_NULL)
+		{
+			bool found = 0;
+			struct Message *msg ;
+			LIST_FOREACH(msg,&(localMailbox->messages), Message)
+			{
+				if (msg->type == MSG_NULL)
+				{
+					found++;
+				}
+			}
+			if (found != numOfMsgs * expectedCopyPerMsg)
+			{
+				cprintf_colored(TEXT_TESTERR_CLR, "%d copies of NULL message not found in local mailbox of env %d\n", numOfMsgs * expectedCopyPerMsg, env->env_id);
+				*correct = 0;
+			}
+		}
+		else
+		{
+			panic("Unexpected msg type!!");
+		}
+		return;
+	}
+
+	else if (strncmp(utilityName, "__GetMailbox@", strlen("__GetMailbox@")) == 0)
+	{
+		bool* correct = (bool*) value ;
+		int number_of_tokens;
+		char *tokens[MAX_ARGUMENTS];
+		strsplit(utilityName, "@", tokens, &number_of_tokens) ;
+		int handle = strtol(tokens[1], NULL, 10);
+		assert(handle >= 0);
+		int connectionType = strtol(tokens[2], NULL, 10);
+		struct Mailbox *mb;
+		*correct = ipc_get_mailbox(handle, &mb, connectionType);
+	}
 	if ((int)value < 0)
 	{
 		if (strcmp(utilityName, "__ReplStrat__") == 0)

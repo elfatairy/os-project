@@ -13,9 +13,11 @@ uint32 expectedInitialVAs[11] = {
 		0xeebfd000, 	//Stack
 		} ;
 
+extern volatile bool printStats;
 
 void _main(void)
 {
+	printStats = 0;
 
 	//	cprintf("envID = %d\n",envID);
 

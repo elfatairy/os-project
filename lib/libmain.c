@@ -50,17 +50,18 @@ libmain(int argc, char **argv)
 			}
 			else
 			{
-				cprintf("Num of PAGE faults = %d, modif = %d\n", myEnv->pageFaultsCounter, myEnv->nModifiedPages);
-				cprintf("# PAGE IN (from disk) = %d, # PAGE OUT (on disk) = %d, # NEW PAGE ADDED (on disk) = %d\n", myEnv->nPageIn, myEnv->nPageOut,myEnv->nNewPageAdded);
+				cprintf("%~	> Num of PAGE faults = %d, modif = %d\n", myEnv->pageFaultsCounter, myEnv->nModifiedPages);
+				cprintf("%~	> # PAGE IN (from disk) = %d, # PAGE OUT (on disk) = %d, # NEW PAGE ADDED (on disk) = %d\n", myEnv->nPageIn, myEnv->nPageOut,myEnv->nNewPageAdded);
 			}
 			//cprintf("Num of freeing scarce memory = %d, freeing full working set = %d\n", myEnv->freeingScarceMemCounter, myEnv->freeingFullWSCounter);
-			cprintf("Num of clocks = %d\n", myEnv->nClocks);
-			cprintf("Num of schedules/CPU: ");
+			cprintf("%~	> Num of clocks = %d\n", myEnv->nClocks);
+			cprintf("%~	> Num of schedules/CPU: ");
 			for (int cp = 0; cp < NCPUS; ++cp) {
 				cprintf("%~CPU[%d]: %d ", cp, myEnv->nSchedPerCPU[cp]);
 			}
 			cprintf("%~\n");
-			cprintf("Num of system calls = %d\n", myEnv->nSysCalls);
+			cprintf("%~	> Num of system calls = %d\n", myEnv->nSysCalls);
+			cprintf("%~	> finished from R.Q. number %d\n", myEnv->isExpandedBefore);
 			cprintf("**************************************\n");
 		}
 		sys_unlock_cons();

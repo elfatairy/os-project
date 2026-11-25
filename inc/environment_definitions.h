@@ -145,6 +145,7 @@ struct Env {
 	int priority;				// Current priority
 	char prog_name[PROGNAMELEN];// Program name (to print it via USER.cprintf in multitasking)
 	LIST_ENTRY(Env) prev_next_info;	// Free list link pointers
+	uint64 added_to_queue_at;
 
 	//================
 	/*CPU THREAD...*/

@@ -5,25 +5,25 @@
  *      Author: HP
  */
 #include "channel.h"
-#include <kern/proc/user_environment.h>
-#include <kern/cpu/sched.h>
-#include <kern/cpu/cpu.h>
-#include <inc/string.h>
 #include <inc/disk.h>
+#include <inc/string.h>
+#include <kern/cpu/cpu.h>
+#include <kern/cpu/sched.h>
+#include <kern/proc/user_environment.h>
+
 
 /************************************************************************************/
 //==================================================================================//
 //============================== GIVEN FUNCTIONS ===================================//
 //==================================================================================//
-//TODO: [PROJECT'26.GM#4] BLOCKING - [0] GIVEN FUNCTIONS
+// TODO: [PROJECT'26.GM#4] BLOCKING - [0] GIVEN FUNCTIONS
 //===============================
 // 1) INITIALIZE THE CHANNEL:
 //===============================
 // initialize its lock & queue
-void init_channel(struct Channel *chan, char *name)
-{
-	strcpy(chan->name, name);
-	init_queue(&(chan->queue));
+void init_channel(struct Channel *chan, char *name) {
+  strcpy(chan->name, name);
+  init_queue(&(chan->queue));
 }
 /************************************************************************************/
 
@@ -36,12 +36,20 @@ void init_channel(struct Channel *chan, char *name)
 // Atomically release lock and sleep on chan.
 // Reacquires lock when awakened.
 // Ref: xv6-x86 OS code
-void sleep(struct Channel *chan, struct kspinlock* lk)
-{
-	//TODO: [PROJECT'26.GM#4] BLOCKING - [13] Channel sleep
-	//Your code is here
-	//Comment the following line
-	panic("sleep() is not implemented yet...!!");
+
+void sleep(struct Channel *myriammmchannn, struct kspinlock *myriammmspinnlockk) {
+
+  // Your Code is Here...
+  acquire_kspinlock(&ProcessQueues.qlock);
+  release_kspinlock(myriammmspinnlockk);
+  struct Env *myriammmprocesss = get_cpu_proc();
+  myriammmprocesss->env_status = ENV_BLOCKED;
+  enqueue(&myriammmchannn->queue, myriammmprocesss);
+  sched();
+  release_kspinlock(&ProcessQueues.qlock);
+  acquire_kspinlock(myriammmspinnlockk);
+  // Comment the following line
+  // panic("sleep() is not implemented yet...!!");
 }
 
 //==================================================
@@ -51,12 +59,19 @@ void sleep(struct Channel *chan, struct kspinlock* lk)
 // The qlock must be held.
 // Ref: xv6-x86 OS code
 // chan MUST be of type "struct Env_Queue" to hold the blocked processes
-void wakeup_one(struct Channel *chan)
-{
-	//TODO: [PROJECT'26.GM#4] BLOCKING - [14] Channel wakeup_one
-	//Your code is here
-	//Comment the following line
-	panic("wakeup_one() is not implemented yet...!!");
+
+void wakeup_one(struct Channel *myriammmchannn) {
+  // TODO: [PROJECT'26.GM#4] BLOCKING - [14] Channel wakeup_one
+  // Your Code is Here...
+  acquire_kspinlock(&ProcessQueues.qlock);
+  struct Env *myriammmmprocessdequeeee = dequeue(&myriammmchannn->queue);
+  if (myriammmmprocessdequeeee != NULL) {
+    myriammmmprocessdequeeee->priority = 0;
+    sched_insert_ready(myriammmmprocessdequeeee);
+  }
+  release_kspinlock(&ProcessQueues.qlock);
+  // Comment the following line
+  // panic("wakeup_one() is not implemented yet...!!");
 }
 
 //====================================================
@@ -66,11 +81,17 @@ void wakeup_one(struct Channel *chan)
 // The queues lock must be held.
 // Ref: xv6-x86 OS code
 // chan MUST be of type "struct Env_Queue" to hold the blocked processes
-void wakeup_all(struct Channel *chan)
-{
-	//TODO: [PROJECT'26.GM#4] BLOCKING - [15] Channel wakeup_all
-	//Your code is here
-	//Comment the following line
-	panic("wakeup_all() is not implemented yet...!!");
-}
 
+void wakeup_all(struct Channel *myriammmchannn) {
+  // TODO: [PROJECT'26.GM#4] BLOCKING - [15] Channel wakeup_all
+  // Your Code is Here...
+  acquire_kspinlock(&ProcessQueues.qlock);
+  while (queue_size(&myriammmchannn->queue) > 0) {
+    struct Env *myriammmmprocessdequeeee = dequeue(&myriammmchannn->queue);
+    myriammmmprocessdequeeee->priority = 0;
+    sched_insert_ready(myriammmmprocessdequeeee);
+  }
+  release_kspinlock(&ProcessQueues.qlock);
+  // Comment the following line
+  // panic("wakeup_all() is not implemented yet...!!");
+}

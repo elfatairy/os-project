@@ -101,6 +101,13 @@ struct UserProgramInfo userPrograms[] = {
 		{ "tmlfq_1", "[Slave program1] of MLFQ Scenario", PTR_START_OF(sc_CPU_MLFQ_slave_1_1)},
 		{ "tmlfq_2", "[Slave program2] of MLFQ Scenario", PTR_START_OF(sc_CPU_MLFQ_slave_1_2)},
 		/********************************************/
+		{ "fib_small", "Fibonacci with small index", PTR_START_OF(fib_small)},
+		{ "fib_medium", "Fibonacci with medium index", PTR_START_OF(fib_medium)},
+		{ "fib_large", "Fibonacci with large index", PTR_START_OF(fib_large)},
+		{ "tst_mlfq_1", "Main program to test MLFQ: last level is FIFO", PTR_START_OF(tst_mlfq_1)},
+		{ "tst_mlfq_2", "Main program to test MLFQ: last level is FIFO", PTR_START_OF(tst_mlfq_2)},
+		{ "tst_mlfq_2_slave", "Slave program of tst_mlfq_2: recursively create itself", PTR_START_OF(tst_mlfq_2_slave)},
+		/********************************************/
 		/**************/
 		/*CONCURRENCY */
 		/**************/
@@ -119,6 +126,30 @@ struct UserProgramInfo userPrograms[] = {
 		{ "tst_protection", "Tests the protection of kernel shared DS (e.g. kernel heap)", PTR_START_OF(tst_protection)},
 		{ "protection_slave1", "Slave program of tst_protection", PTR_START_OF(tst_protection_slave1)},
 		/********************************************/
+		/*******/
+		/*IPC  */
+		/*******/
+		{ "ipc1_0", "IPC#1: tests message validation at sender & receiver", PTR_START_OF(ipc1_0)},
+		{ "ipc1_1", "IPC#1: tests 1-1 non-blocking model", PTR_START_OF(ipc1_1)},
+		{ "ipc1_2", "IPC#1: tests 1-1 model with blocking receiver", PTR_START_OF(ipc1_2)},
+		{ "ipc1_3", "IPC#1: tests M-1 non-blocking model", PTR_START_OF(ipc1_3)},
+		{ "ipc1_4", "IPC#1: tests M-1 model with blocking receiver", PTR_START_OF(ipc1_4)},
+		{ "ipc1_5", "IPC#1: tests M-1 model with blocking sender & receiver", PTR_START_OF(ipc1_5)},
+		{ "ipc1_sender1", "IPC#1: sender program", PTR_START_OF(ipc1_sender1)},
+		{ "ipc1_receiver1", "IPC#1: receiver program", PTR_START_OF(ipc1_receiver1)},
+		{ "ipc2_0", "IPC#2: tests ipc_get_mailbox cases", PTR_START_OF(ipc2_0)},
+		{ "ipc2_1", "IPC#2: tests validations of all functions", PTR_START_OF(ipc2_1)},
+		{ "ipc2_2", "IPC#2: tests connection, disconnection & 1-M broadcast", PTR_START_OF(ipc2_2)},
+		{ "ipc2_3", "IPC#2: tests broadcast without receive in N-M model", PTR_START_OF(ipc2_3)},
+		{ "ipc2_4", "IPC#2: tests broadcast with skipped receivers without receive in N-M model", PTR_START_OF(ipc2_4)},
+		{ "ipc2_0_slave", "IPC#2: slave program that tests cases of ipc_get_mailbox", PTR_START_OF(ipc2_0_slave)},
+		{ "ipc2_validations", "IPC#2: slave program that tests all validations", PTR_START_OF(ipc2_validations)},
+		{ "ipc2_sender0", "IPC#2: sender program to test connection only", PTR_START_OF(ipc2_sender0)},
+		{ "ipc2_sender1", "IPC#2: sender program to test dis/connection only", PTR_START_OF(ipc2_sender1)},
+		{ "ipc2_receiver1", "IPC#2: receiver program to test dis/connection only", PTR_START_OF(ipc2_receiver1)},
+		{ "ipc2_sender2", "IPC#2: sender program to test broadcast without receive", PTR_START_OF(ipc2_sender2)},
+		{ "ipc2_receiver2", "IPC#2: receiver program to test broadcast without receive", PTR_START_OF(ipc2_receiver2)},
+		{ "ipc2_receiver3", "IPC#2: receiver program to fill its mailbox", PTR_START_OF(ipc2_receiver3)},
 		/******************/
 		/*EXIT (env_free) */
 		/******************/
