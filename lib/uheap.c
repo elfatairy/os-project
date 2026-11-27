@@ -79,6 +79,12 @@ int unmark_buddy_space_page(uint32 va) {
 	  return 0;
 }
 
+bool is_buddy_space_page(uint32 va) {
+	 if (va < USER_HEAP_START || va >= USER_HEAP_MAX)
+	    return 0;
+	  uint32 i = uheap_page_index(va);
+	  return (buddy_page_bitmap[i / 32] >> (i % 32)) & 1;
+}
 
 void  delete_buddy_space(void *va)
 {
@@ -124,12 +130,7 @@ void* malloc(uint32 size)
 // [4] FREE SPACE FROM USER HEAP:
 //=================================
 
-bool is_buddy_space_page(uint32 va) {
-	 if (va < USER_HEAP_START || va >= USER_HEAP_MAX)
-	    return 0;
-	  uint32 i = uheap_page_index(va);
-	  return (buddy_page_bitmap[i / 32] >> (i % 32)) & 1;
-}
+
 
 void free(void* virtual_address)
 {
