@@ -115,24 +115,20 @@ void kheap_init() {
 /**************************************************/
 int mark_buddy_space_page(uint32 va) {
   uint32 *ptr_page_table;
-
   if (get_page_table(ptr_page_directory, (uint32)va, &ptr_page_table) ==
       TABLE_NOT_EXIST) {
     return 1;
   }
   ptr_page_table[PTX(va)] = ptr_page_table[PTX(va)] | PERM_BSP;
-
   return 0;
 }
 int unmark_buddy_space_page(uint32 va) {
   uint32 *ptr_page_table;
-
   if (get_page_table(ptr_page_directory, (uint32)va, &ptr_page_table) ==
       TABLE_NOT_EXIST) {
     return 1;
   }
   ptr_page_table[PTX(va)] = ptr_page_table[PTX(va)] & (~PERM_BSP);
-
   return 0;
 }
 
@@ -360,6 +356,7 @@ void kfree(void *virtual_address) {
   //
   //   /*EFFICIENT IMPLEMENTATION ~O(#FREE BLOCKS + #FREED PAGES) IS REQUIRED */
 }
+
 unsigned int kheap_physical_address(unsigned int virtual_address) {
   // TODO: [PROJECT'26.GM#2] KERNEL HEAP - [8] kheap_physical_address
   // Your code is here
