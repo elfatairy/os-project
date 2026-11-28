@@ -25,6 +25,47 @@ void uheap_init()
 	}
 }
 /************************************************************************************/
+struct AreaMetaData {
+	void *start_address;
+	uint32 size;
+	LIST_ENTRY(AreaMetaData) prev_next_info;
+} __attribute__((packed));
+
+LIST_HEAD(AreaList, AreaMetaData);
+struct AreaList freeAreaList;
+uint16 area_sizes[(USER_HEAP_MAX - USER_HEAP_START) / PAGE_SIZE];
+
+struct AreaMetaData *create_area_metadata(void *start_address, uint32 size)
+{
+	struct AreaMetaData *area = (struct AreaMetaData *)alloc_block(sizeof(struct AreaMetaData));
+	if (area == NULL) {
+		return NULL;
+	}
+
+	area->start_address = start_address;
+	area->size = size;
+	area->prev_next_info.le_next = NULL;
+	area->prev_next_info.le_prev = NULL;
+	return area;
+}
+
+void remove_area_metadata(struct AreaMetaData *area)
+{
+	free_block(area);
+}
+
+uint16 get_area_size(uint32 va)
+{
+	uint32 page_number = (va - uheapPageAllocStart) / PAGE_SIZE;
+	return area_sizes[page_number];
+}
+
+void set_area_size(uint32 va, uint16 page_count)
+{
+	uint32 page_number = (va - uheapPageAllocStart) / PAGE_SIZE;
+	area_sizes[page_number] = page_count;
+}
+
 
 //==================================================================================//
 //============================ REQUIRED FUNCTIONS ==================================//
@@ -33,9 +74,6 @@ void uheap_init()
 /**************************************************/
 /* BLOCK ALLOCATOR */
 /**************************************************/
-
-
-
 //=================================
 // [1] CREATE NEW BUDDY SPACE:
 //=================================
@@ -106,12 +144,65 @@ void  delete_buddy_space(void *va)
 
 }
 
+
+
 /**************************************************/
 /* PAGE ALLOCATOR */
 /**************************************************/
 //=================================
 // [3] ALLOCATE SPACE IN USER HEAP:
 //=================================
+
+void *get_free_area(uint32 size)
+{
+	uint32 required_pages = size / PAGE_SIZE;
+
+	if (uheapPlaceStrategy == UHP_PLACE_CUSTOMFIT) {
+		struct AreaMetaData *element;
+		struct AreaMetaData *used_area = NULL;
+
+		LIST_FOREACH(element, &freeAreaList, AreaMetaData) {
+			if (element->size == size) {
+				used_area = element;
+				break;
+			}
+			else if (element->size > size) {
+				if ((used_area == NULL) || (element->size > used_area->size)) {
+					used_area = element;
+				}
+			}
+		}
+
+		void *area_start = NULL;
+
+		if (used_area == NULL) {
+			if (USER_HEAP_MAX - size < uheapPageAllocBreak) {
+				return NULL;
+			}
+			area_start = (void *)uheapPageAllocBreak;
+			uheapPageAllocBreak = uheapPageAllocBreak + size;
+		}
+
+		else {
+			area_start = used_area->start_address;
+			if (used_area->size == size) {
+				LIST_REMOVE(&freeAreaList, used_area);
+				remove_area_metadata(used_area);
+			}
+
+			else {
+				used_area->start_address = used_area->start_address + size;
+				used_area->size = used_area->size - size;
+			}
+		}
+		set_area_size((uint32)area_start, required_pages);
+		return area_start;
+	}
+	else {
+		panic("Uheap placement strategy: %c is not implemented", uheapPlaceStrategy);
+	}
+}
+
 
 void* malloc(uint32 size)
 {
@@ -122,16 +213,28 @@ void* malloc(uint32 size)
 	//==============================================================
 	//TODO: [PROJECT'26.IM#2] USER HEAP - [3] malloc
 	//Your code is here
+	if (size <= DYN_ALLOC_MAX_BLOCK_SIZE) {
+			return alloc_block(size);
+		}
+
+	uint32 required_size = ROUNDUP(size, PAGE_SIZE);
+
+	void *area_start = get_free_area(required_size);
+		if (area_start == NULL) {
+			return NULL;
+		}
+
+	sys_allocate_user_mem((uint32)area_start, required_size);
+
+
+	return area_start;
 	//Comment the following line
-	panic("malloc() is not implemented yet...!!");
+	//panic("malloc() is not implemented yet...!!");
 }
 
 //=================================
 // [4] FREE SPACE FROM USER HEAP:
 //=================================
-
-
-
 void free(void* virtual_address)
 {
 	//TODO: [PROJECT'26.IM#2] USER HEAP - [5] free
