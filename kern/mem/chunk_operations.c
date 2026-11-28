@@ -183,7 +183,7 @@ void allocate_user_mem(struct Env* e, uint32 virtual_address, uint32 size)
 		va += PAGE_SIZE;
 	}
 	//Comment the following line
-	panic("allocate_user_mem() is not implemented yet...!!");
+	//panic("allocate_user_mem() is not implemented yet...!!");
 }
 
 //=====================================
@@ -193,8 +193,25 @@ void free_user_mem(struct Env* e, uint32 virtual_address, uint32 size)
 {
 	//TODO: [PROJECT'26.IM#2] USER HEAP - [6] free_user_mem
 	//Your code is here
+	uint32 va = EXTRACT_ADDRESS(virtual_address);
+	uint32 limit = va + size;
+
+	while (va < limit) {
+		uint32 *ptr_page_table = NULL;
+		if (get_page_table(e->env_page_directory, va, &ptr_page_table) != TABLE_NOT_EXIST) {
+			pf_remove_env_page(e, va);
+
+			env_page_ws_invalidate(e, va);
+
+			unmap_frame(e->env_page_directory, va);
+
+			pt_set_page_permissions(e->env_page_directory, va, 0, PERM_UHPAGE);
+		}
+
+		va += PAGE_SIZE;
+	}
 	//Comment the following line
-	panic("free_user_mem() is not implemented yet...!!");
+	//panic("free_user_mem() is not implemented yet...!!");
 }
 
 //=====================================

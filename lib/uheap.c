@@ -11,7 +11,8 @@ static inline uint32 uheap_page_index(uint32 va) {
 //==================================================================================//
 //============================== GIVEN FUNCTIONS ===================================//
 //==================================================================================//
-//TODO: [PROJECT'26.IM#2] USER HEAP - [0] GIVEN FUNCTION
+//TODO: [PROJECT'26.IM#2] USER HEAP - [0] GIVEN FUNCTION\
+
 int __firstTimeFlag = 1;
 void uheap_init()
 {
@@ -24,7 +25,9 @@ void uheap_init()
 		__firstTimeFlag = 0;
 	}
 }
+
 /************************************************************************************/
+
 //==================================================================================//
 //============================ REQUIRED FUNCTIONS ==================================//
 //==================================================================================//
@@ -217,7 +220,6 @@ void *get_free_area(uint32 size)
 // [3] ALLOCATE SPACE IN USER HEAP:
 //=================================
 
-
 void* malloc(uint32 size)
 {
 	//==============================================================
@@ -299,7 +301,6 @@ void free(void* virtual_address)
 		LIST_REMOVE(&freeAreaList, prev_area);
 	}
 
-	/* BLANK 3: lower the break, or fill the spare entry and add it to the list */
 	if (merged_area + size_after_merge == uheapPageAllocBreak) {
 		uheapPageAllocBreak = merged_area;
 	}
