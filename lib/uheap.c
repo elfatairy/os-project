@@ -11,7 +11,7 @@ static inline uint32 uheap_page_index(uint32 va) {
 //==================================================================================//
 //============================== GIVEN FUNCTIONS ===================================//
 //==================================================================================//
-//TODO: [PROJECT'26.IM#2] USER HEAP - [0] GIVEN FUNCTION\
+
 
 int __firstTimeFlag = 1;
 void uheap_init()
@@ -229,7 +229,7 @@ void* malloc(uint32 size)
 	//==============================================================
 	//TODO: [PROJECT'26.IM#2] USER HEAP - [3] malloc
 	//Your code is here
-	if (size <= DYN_ALLOC_MAX_BLOCK_SIZE) {
+	if (size <= DYN_ALLOC_MAX_BLOCK_SIZE - META_DATA_SIZE) {
 			return alloc_block(size);
 		}
 

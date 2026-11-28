@@ -46,7 +46,7 @@ bool is_buddy_space_page(uint32 pte);
 struct AreaMetaData *create_area_metadata(void *start_address, uint32 size);
 void remove_area_metadata(struct AreaMetaData *area);
 
-uint16 get_area_size(uint32 va);s
+uint16 get_area_size(uint32 va);
 void set_area_size(uint32 va, uint16 page_count);
 
 void *get_free_area(unsigned int size);

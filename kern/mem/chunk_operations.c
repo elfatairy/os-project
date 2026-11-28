@@ -208,8 +208,15 @@ void free_user_mem(struct Env* e, uint32 virtual_address, uint32 size)
 			pt_set_page_permissions(e->env_page_directory, va, 0, PERM_UHPAGE);
 		}
 
+
 		va += PAGE_SIZE;
 	}
+
+	if (LIST_SIZE(&(e->page_WS_active_list)) + LIST_SIZE(&(e->page_WS_second_list)) < e->page_WS_max_size)
+	{
+		e->page_last_WS_element = NULL;
+	}
+
 	//Comment the following line
 	//panic("free_user_mem() is not implemented yet...!!");
 }

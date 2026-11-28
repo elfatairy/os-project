@@ -43,15 +43,11 @@ void PrintFreeBlockLists() {
 //===========================
 static struct BlockMetaData *find_block_info(void *va) {
   uint32 virt_addr = (uint32)va;
-  uint32 current_address = ROUNDDOWN(virt_addr, PAGE_SIZE);
-  uint32 page_end = current_address + PAGE_SIZE;
-
-  while (current_address < page_end) {
-    struct BlockMetaData *blk = (struct BlockMetaData *)current_address;
-    uint32 size = BLOCK_SIZE(blk->level);
-    if (virt_addr >= current_address && virt_addr < current_address + size)
+  for (int l = BUDDY_UPPER_LEVEL; l >= BUDDY_LOWER_LEVEL; --l) {
+    uint32 start = virt_addr & ~((uint32)BLOCK_SIZE(l) - 1);
+    struct BlockMetaData *blk = (struct BlockMetaData *)start;
+    if (blk->level == l)
       return blk;
-    current_address += size;
   }
   return NULL;
 }
@@ -131,8 +127,7 @@ static inline int is_left(struct BlockMetaData *that_block) {
   return (((uint32)that_block >> that_block->level) & 1) == 0;
 }
 
-static struct BlockMetaData *
-check_for_my_buddy(struct BlockMetaData *that_block) {
+static struct BlockMetaData * check_for_my_buddy(struct BlockMetaData *that_block) {
   if (is_left(that_block)) {
     return (struct BlockMetaData *)((uint32)that_block +
                                     BLOCK_SIZE(that_block->level));
